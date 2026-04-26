@@ -3,7 +3,7 @@
     <PageHeader
       :eyebrow="t('history.title')"
       :title="t('history.title')"
-      :description="`${jobs.length} job${jobs.length > 1 ? 's' : ''} au total`"
+      :description="t('history.description', jobs.length)"
     >
       <template #actions>
         <button class="btn-secondary btn-sm" :disabled="loading" @click="refresh">
@@ -69,9 +69,9 @@
               <th>Nom</th>
               <th>Client</th>
               <th>Date</th>
-              <th>Mode</th>
-              <th>Statut</th>
-              <th>Durée</th>
+              <th>{{ t('history.columns.mode') }}</th>
+              <th>{{ t('history.columns.status') }}</th>
+              <th>{{ t('history.columns.duration') }}</th>
               <th class="text-right pr-5">Actions</th>
             </tr>
           </thead>
@@ -106,7 +106,7 @@
                     title="Voir les résultats"
                   >
                     <Icon name="bar_chart" :size="14" />
-                    <span class="hidden md:inline">Résultats</span>
+                    <span class="hidden md:inline">{{ t('jobDetail.sections.results') }}</span>
                   </RouterLink>
                   <a
                     v-if="isFinished(job)"

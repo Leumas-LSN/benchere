@@ -43,7 +43,7 @@
     <div v-if="job?.status === 'failed'" class="alert-error mb-6">
       <Icon name="x_circle" :size="18" class="mt-0.5 shrink-0" />
       <div class="flex-1">
-        <p class="font-semibold">Le job a échoué</p>
+        <p class="font-semibold">{{ t('jobDetail.failedReason') }}</p>
         <p v-if="job?.error_message" class="font-mono text-xs mt-1 break-all opacity-90">
           {{ job.error_message }}
         </p>
@@ -64,7 +64,7 @@
     <!-- Results -->
     <section class="card-flush mb-6">
       <header class="card-header">
-        <span class="card-title">Résultats par profil</span>
+        <span class="card-title">{{ t('jobDetail.sections.profiles') }}</span>
         <span v-if="results.length" class="pill">{{ results.length }} profils</span>
       </header>
       <div v-if="results.length === 0">
@@ -77,8 +77,8 @@
               <th>Profil</th>
               <th class="text-right">IOPS Read max</th>
               <th class="text-right">IOPS Write max</th>
-              <th class="text-right">Débit Read max</th>
-              <th class="text-right">Débit Write max</th>
+              <th class="text-right">{{ t('jobDetail.columns.throughputRead') }}</th>
+              <th class="text-right">{{ t('jobDetail.columns.throughputWrite') }}</th>
               <th class="text-right">Latence avg</th>
               <th class="text-center">Verdict</th>
             </tr>
@@ -119,7 +119,7 @@
     <!-- Workers -->
     <section class="card-flush">
       <header class="card-header">
-        <span class="card-title">Workers utilisés</span>
+        <span class="card-title">{{ t('jobDetail.sections.workers') }}</span>
         <span v-if="workers.length" class="pill">{{ workers.length }}</span>
       </header>
       <div class="p-5">

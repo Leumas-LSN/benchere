@@ -3,16 +3,16 @@
     <PageHeader
       :eyebrow="t('newJob.eyebrow')"
       :title="t('newJob.title')"
-      description="Renseignez l'identité, dimensionnez les workers et choisissez le mode. Le provisioning démarre dès l'envoi du formulaire."
+      :description="t('newJob.description')"
     />
 
     <!-- Onboarding -->
     <div v-if="!configured" class="alert-warn mb-6">
       <Icon name="alert" :size="18" class="mt-0.5 shrink-0" />
       <div class="flex-1">
-        <p class="font-semibold">Proxmox n'est pas configuré</p>
+        <p class="font-semibold">{{ t('notConfigured.title') }}</p>
         <p class="mt-0.5 opacity-80">
-          Sans configuration valide (URL, token, node, storage), le provisioning des workers échouera.
+          {{ t('notConfigured.hint') }}
         </p>
       </div>
       <RouterLink to="/settings" class="btn-sm btn inline-flex bg-white text-amber-800 hover:bg-amber-50 border border-amber-300 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700/50">
@@ -25,16 +25,16 @@
       <!-- Identification -->
       <section class="card space-y-5">
         <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">Identification</h2>
+          <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.identification') }}</h2>
           <span class="card-title">Étape 1 / 4</span>
         </header>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="label">Nom du job</label>
+            <label class="label">{{ t('newJob.fields.jobName') }}</label>
             <input v-model="form.name" type="text" placeholder="benchmark-prod-01" class="input" required />
           </div>
           <div>
-            <label class="label">Nom du client</label>
+            <label class="label">{{ t('newJob.fields.clientName') }}</label>
             <input v-model="form.client_name" type="text" placeholder="Acme Corp" class="input" required />
           </div>
         </div>
@@ -43,13 +43,13 @@
       <!-- Storage pools -->
       <section class="card space-y-4">
         <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">Storage pools à benchmarker</h2>
+          <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.storage') }}</h2>
           <span class="card-title">Étape 2 / 5</span>
         </header>
-        <p class="helper">Sélectionne un ou plusieurs pools. Un job indépendant sera créé pour chaque pool, exécutés à la suite.</p>
-        <div v-if="storagesLoading" class="text-sm fg-muted">Chargement des storage pools…</div>
+        <p class="helper">{{ t('newJob.storage.hint') }}</p>
+        <div v-if="storagesLoading" class="text-sm fg-muted">{{ t('newJob.storage.loading') }}</div>
         <div v-else-if="storagesError" class="text-sm text-red-600 dark:text-red-400">{{ storagesError }}</div>
-        <div v-else-if="!availableStorages.length" class="text-sm fg-muted">Aucun storage trouvé. Vérifie ta configuration Proxmox.</div>
+        <div v-else-if="!availableStorages.length" class="text-sm fg-muted">{{ t('newJob.storage.empty') }}</div>
         <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-2">
           <label
             v-for="s in availableStorages"
@@ -83,32 +83,32 @@
       <!-- Workers -->
       <section class="card space-y-5">
         <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">Workers</h2>
+          <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.workers') }}</h2>
           <span class="card-title">Étape 2 / 4</span>
         </header>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label class="label">Nombre de workers</label>
+            <label class="label">{{ t('newJob.fields.workerCount') }}</label>
             <input v-model.number="form.worker_count" type="number" min="1" max="20" class="input" required />
           </div>
           <div>
-            <label class="label">vCPU / worker</label>
+            <label class="label">{{ t('newJob.fields.vcpu') }}</label>
             <input v-model.number="form.worker_cpu" type="number" min="1" max="64" class="input" required />
           </div>
           <div>
-            <label class="label">RAM / worker (MB)</label>
+            <label class="label">{{ t('newJob.fields.ram') }}</label>
             <input v-model.number="form.worker_ram_mb" type="number" min="512" class="input" required />
           </div>
           <div>
-            <label class="label">Disque OS (GB)</label>
+            <label class="label">{{ t('newJob.fields.osDisk') }}</label>
             <input v-model.number="form.os_disk_gb" type="number" min="10" class="input" required />
           </div>
           <div>
-            <label class="label">Disques data / worker</label>
+            <label class="label">{{ t('newJob.fields.dataDisks') }}</label>
             <input v-model.number="form.data_disks" type="number" min="0" max="8" class="input" />
           </div>
           <div>
-            <label class="label">Taille data (GB)</label>
+            <label class="label">{{ t('newJob.fields.dataDiskSize') }}</label>
             <input v-model.number="form.data_disk_gb" type="number" min="1" class="input" />
           </div>
         </div>
@@ -117,7 +117,7 @@
       <!-- Mode -->
       <section class="card space-y-5">
         <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">Mode de benchmark</h2>
+          <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.mode') }}</h2>
           <span class="card-title">Étape 3 / 4</span>
         </header>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -155,10 +155,10 @@
       <!-- Profiles -->
       <section v-if="form.mode !== 'cpu'" class="card space-y-4">
         <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">Profils elbencho</h2>
+          <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.profiles') }}</h2>
           <span class="card-title">Étape 4 / 4 · Stockage</span>
         </header>
-        <div v-if="profiles.length === 0" class="text-sm fg-muted">Chargement des profils…</div>
+        <div v-if="profiles.length === 0" class="text-sm fg-muted">{{ t('newJob.profilesLoading') }}</div>
         <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-2">
           <label
             v-for="p in profiles"
@@ -197,21 +197,21 @@
       <!-- stress-ng -->
       <section v-if="form.mode !== 'storage'" class="card space-y-5">
         <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">Paramètres stress-ng</h2>
+          <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.stress') }}</h2>
           <span class="card-title">Étape 4 / 4 · CPU</span>
         </header>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="label">Workers stress-ng</label>
+            <label class="label">{{ t('newJob.fields.stressWorkers') }}</label>
             <input v-model.number="form.stress_config.workers" type="number" min="1" class="input" />
           </div>
           <div>
-            <label class="label">Timeout (secondes)</label>
+            <label class="label">{{ t('newJob.fields.stressTimeout') }}</label>
             <input v-model.number="form.stress_config.timeout" type="number" min="10" class="input" />
           </div>
         </div>
         <div>
-          <label class="label">Stressors</label>
+          <label class="label">{{ t('newJob.fields.stressors') }}</label>
           <div class="flex flex-wrap gap-2 mt-1">
             <label
               v-for="s in stressors"
@@ -240,7 +240,7 @@
       </div>
 
       <div class="flex items-center justify-between gap-3 pt-2">
-        <RouterLink to="/" class="btn-ghost">Annuler</RouterLink>
+        <RouterLink to="/" class="btn-ghost">{{ t('common.cancel') }}</RouterLink>
         <button type="submit" class="btn-primary btn-lg" :disabled="submitting">
           <Spinner v-if="submitting" :size="16" />
           <Icon v-else name="play" :size="16" />

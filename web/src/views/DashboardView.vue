@@ -22,7 +22,7 @@
               class="w-1.5 h-1.5 rounded-full"
               :class="wsStore.connected ? 'bg-emerald-500 animate-pulse-dot' : 'bg-ink-400'"
             ></span>
-            WS {{ wsStore.connected ? 'live' : 'inactif' }}
+            {{ wsStore.connected ? t('dashboard.wsLive') : t('dashboard.wsInactive') }}
           </span>
         </span>
       </template>
@@ -70,7 +70,7 @@
     >
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2.5">
-          <span class="card-title">Provisioning des workers</span>
+          <span class="card-title">{{ t("newJob.submitting") }}</span>
         </div>
         <span class="num text-sm fg-secondary">{{ Math.round(wsStore.provProgress * 100) }}%</span>
       </div>
@@ -104,14 +104,14 @@
         icon="zap"
         label="IOPS Read"
         :value="formatIops(wsStore.elbenchoMetrics.iopsRead)"
-        :hint="wsStore.elbenchoMetrics.profileName || 'En attente…'"
+        :hint="wsStore.elbenchoMetrics.profileName || t('dashboard.waiting')"
         tone="brand"
       />
       <StatCard
         icon="zap"
         label="IOPS Write"
         :value="formatIops(wsStore.elbenchoMetrics.iopsWrite)"
-        :hint="wsStore.elbenchoMetrics.profileName || 'En attente…'"
+        :hint="wsStore.elbenchoMetrics.profileName || t('dashboard.waiting')"
         tone="brand"
       />
       <StatCard
@@ -166,7 +166,7 @@
     <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div class="card-flush">
         <header class="card-header">
-          <span class="card-title">Cluster Proxmox</span>
+          <span class="card-title">{{ t('dashboard.sections.cluster') }}</span>
           <span class="pill">{{ Object.keys(wsStore.nodeMetrics).length }} nodes</span>
         </header>
         <div class="px-5 py-2">
@@ -187,20 +187,20 @@
 
       <div class="card-flush">
         <header class="card-header">
-          <span class="card-title">Workers</span>
+          <span class="card-title">{{ t('dashboard.sections.workers') }}</span>
           <span class="pill">{{ workers.length }}</span>
         </header>
         <div class="p-5">
           <div v-if="workers.length === 0">
             <EmptyState
               v-if="job?.status === 'failed'"
-              icon="server" title="Aucun worker créé"
-              description="Le job a échoué avant de provisionner les workers."
+              icon="server" title="{{ t('dashboard.workers.none') }}"
+              description="{{ t('dashboard.workers.noneFailed') }}"
             />
             <EmptyState
               v-else
-              icon="server" title="Provisionnement en cours"
-              description="Les workers apparaîtront dès leur création."
+              icon="server" :title="t('dashboard.sections.provisioning')"
+              description="{{ t('dashboard.workers.noneProvisioning') }}"
             />
           </div>
           <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -225,6 +225,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useWsStore } from '../stores/ws.js'
 import { useJobsStore } from '../stores/jobs.js'
@@ -239,6 +240,8 @@ import PageHeader   from '../components/PageHeader.vue'
 import ProgressBar  from '../components/ProgressBar.vue'
 import Icon         from '../components/Icon.vue'
 import Spinner      from '../components/Spinner.vue'
+
+const { t } = useI18n()
 
 const route     = useRoute()
 const wsStore   = useWsStore()

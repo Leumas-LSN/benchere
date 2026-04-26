@@ -3,28 +3,28 @@
     <PageHeader
       :eyebrow="t('settings.title')"
       :title="t('settings.title')"
-      description="Ces paramètres sont persistés et pré-remplis à chaque visite. Ils sont indispensables pour provisionner les workers."
+      :description="t('settings.description')"
     />
 
     <form @submit.prevent="save" class="space-y-6">
       <!-- Connection -->
       <section class="card space-y-5">
         <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">Connexion API</h2>
-          <span class="card-title">Endpoint Proxmox</span>
+          <h2 class="text-sm font-semibold fg-primary">{{ t('settings.sections.connection') }}</h2>
+          <span class="card-title">{{ t('settings.sections.connectionRight') }}</span>
         </header>
         <div>
-          <label class="label">URL API Proxmox</label>
+          <label class="label">{{ t('settings.fields.apiUrl') }}</label>
           <input v-model="form.proxmox_url" type="url" placeholder="https://pve.example.com:8006" class="input" />
-          <p class="helper">Format complet incluant le port (8006 par défaut).</p>
+          <p class="helper">{{ t('settings.fields.apiUrlHint') }}</p>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="label">Token ID</label>
+            <label class="label">{{ t('settings.fields.tokenId') }}</label>
             <input v-model="form.proxmox_token_id" type="text" placeholder="root@pam!benchere" class="input" autocomplete="off" />
           </div>
           <div>
-            <label class="label">Token Secret</label>
+            <label class="label">{{ t('settings.fields.tokenSecret') }}</label>
             <div class="relative">
               <input
                 v-model="form.proxmox_token_secret"
@@ -49,21 +49,21 @@
       <!-- Topology -->
       <section class="card space-y-5">
         <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">Topologie</h2>
-          <span class="card-title">Cible déploiement</span>
+          <h2 class="text-sm font-semibold fg-primary">{{ t('settings.sections.topology') }}</h2>
+          <span class="card-title">{{ t('settings.sections.topologyRight') }}</span>
         </header>
         <div>
-          <label class="label">Node de déploiement</label>
+          <label class="label">{{ t('settings.fields.node') }}</label>
           <input v-model="form.proxmox_node" type="text" placeholder="pve-01" class="input" />
         </div>
         <div>
-          <label class="label">Image storage</label>
+          <label class="label">{{ t('settings.fields.imageStorage') }}</label>
           <p class="helper -mt-1 mb-2">
-            Stockage utilisé pour télécharger l'image cloud Debian 12. Doit être de type
+            {{ t('settings.fields.imageStorageHint') }}
             <span class="code-inline">dir</span>.
           </p>
           <select v-if="storages.length" v-model="form.image_storage" class="select">
-            <option value="">local (défaut)</option>
+            <option value="">{{ t('settings.actions.defaultLocal') }}</option>
             <option v-for="s in storages" :key="s.id" :value="s.id">
               {{ s.id }} ({{ s.type }})
             </option>
@@ -78,13 +78,13 @@
         </div>
 
         <div>
-          <label class="label">Bridge réseau workers</label>
+          <label class="label">{{ t('settings.fields.bridge') }}</label>
           <p class="helper -mt-1 mb-2">
-            Bridge Linux ou OVS auquel les VMs workers seront raccordées. Doit fournir un DHCP joignable depuis le Master.
+            {{ t('settings.fields.bridgeHint') }}
           </p>
           <div class="flex gap-2">
             <select v-if="bridges.length" v-model="form.network_bridge" class="select flex-1">
-              <option value="">— choisir un bridge —</option>
+              <option value="">{{ t('settings.actions.pickBridge') }}</option>
               <option v-for="b in bridges" :key="b.Name" :value="b.Name" :disabled="!b.Active">
                 {{ b.Name }}{{ b.Address ? " (" + b.Address + ")" : "" }}{{ !b.Active ? " — inactif" : "" }}
               </option>
@@ -104,7 +104,7 @@
             >
               <Spinner v-if="scanningBridges" :size="14" />
               <Icon v-else name="search" :size="14" />
-              Scanner
+              {{ t('settings.actions.scan') }}
             </button>
           </div>
           <p v-if="bridgesError" class="helper text-red-600 dark:text-red-400 mt-2">{{ bridgesError }}</p>
@@ -114,41 +114,41 @@
       <!-- Worker network -->
       <section class="card space-y-5">
         <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">Réseau workers</h2>
-          <span class="card-title">IPs statiques</span>
+          <h2 class="text-sm font-semibold fg-primary">{{ t('settings.sections.workerNetwork') }}</h2>
+          <span class="card-title">{{ t('settings.sections.workerNetworkRight') }}</span>
         </header>
         <p class="helper -mt-2">
-          Plage d'IPs assignées aux workers via cloud-init. Évite la dépendance à <span class="code-inline">qemu-guest-agent</span> (souvent absent des images cloud) pour découvrir leur adresse. Laisse vide pour utiliser DHCP + agent (legacy).
+          {{ t('settings.fields.workerNetworkLead') }} <span class="code-inline">qemu-guest-agent</span> 
         </p>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="label">Plage d'IPs workers</label>
+            <label class="label">{{ t('settings.fields.ipPool') }}</label>
             <input v-model="form.worker_ip_pool" type="text" placeholder="10.90.0.200-10.90.0.220" class="input" />
-            <p class="helper">Format <span class="code-inline">A.B.C.D-A.B.C.E</span>, inclusif.</p>
+            <p class="helper">{{ t('settings.fields.ipPoolHint') }}</p>
           </div>
           <div>
-            <label class="label">Masque (CIDR)</label>
+            <label class="label">{{ t('settings.fields.cidr') }}</label>
             <input v-model="form.worker_cidr" type="text" inputmode="numeric" pattern="[0-9]{1,2}" placeholder="24" class="input" />
-            <p class="helper">Préfixe réseau (24 = 255.255.255.0).</p>
+            <p class="helper">{{ t('settings.fields.cidrHint') }}</p>
           </div>
         </div>
         <div>
-          <label class="label">Passerelle</label>
+          <label class="label">{{ t('settings.fields.gateway') }}</label>
           <input v-model="form.worker_gateway" type="text" placeholder="10.90.0.1" class="input" />
-          <p class="helper">IP du routeur du segment réseau des workers.</p>
+          <p class="helper">{{ t('settings.fields.gatewayHint') }}</p>
         </div>
       </section>
 
       <!-- SSH -->
       <section class="card space-y-5">
         <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">SSH workers</h2>
-          <span class="card-title">Accès Ansible</span>
+          <h2 class="text-sm font-semibold fg-primary">{{ t('settings.sections.ssh') }}</h2>
+          <span class="card-title">{{ t('settings.sections.sshRight') }}</span>
         </header>
         <div>
-          <label class="label">Chemin de la clé SSH (sur le Master)</label>
+          <label class="label">{{ t('settings.fields.sshKeyPath') }}</label>
           <input v-model="form.ssh_key_path" type="text" placeholder="/opt/benchere/id_rsa" class="input" />
-          <p class="helper">Clé privée utilisée par Ansible pour se connecter aux workers.</p>
+          <p class="helper">{{ t('settings.fields.sshKeyPathHint') }}</p>
         </div>
       </section>
 
@@ -258,7 +258,7 @@ async function scanBridges() {
   bridgesError.value = ""
   try {
     bridges.value = await settingsStore.scanBridges()
-    if (!bridges.value.length) bridgesError.value = "Aucun bridge trouvé sur ce node."
+    if (!bridges.value.length) bridgesError.value = t("settings.feedback.noBridges")
   } catch (e) {
     bridgesError.value = "Erreur : " + e.message
   } finally {
@@ -271,7 +271,7 @@ async function scanStorages() {
   scanError.value = ''
   try {
     storages.value = await settingsStore.scanStorages()
-    if (!storages.value.length) scanError.value = 'Aucun storage trouvé.'
+    if (!storages.value.length) scanError.value = t('settings.feedback.noStorages')
   } catch (e) {
     scanError.value = 'Erreur : ' + e.message
   } finally {

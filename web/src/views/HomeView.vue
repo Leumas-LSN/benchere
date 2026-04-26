@@ -3,7 +3,7 @@
     <PageHeader
       :eyebrow="t('home.title')"
       :title="t('home.title')"
-      :description="`Synthèse de l'infrastructure et des benchmarks. Mise à jour toutes les ${REFRESH_MS / 1000}s.`"
+      :description="t('home.description', { seconds: REFRESH_MS / 1000 })"
     >
       <template #actions>
         <button class="btn-secondary btn-sm" :disabled="loading" @click="loadOverview">
@@ -22,7 +22,7 @@
     <div v-if="!configured" class="alert-warn mb-6">
       <Icon name="alert" :size="18" class="mt-0.5 shrink-0" />
       <div class="flex-1">
-        <p class="font-semibold">Proxmox n'est pas configuré</p>
+        <p class="font-semibold">{{ t('notConfigured.title') }}</p>
         <p class="mt-0.5 opacity-80">Renseignez l'URL, le token et les storages avant de lancer un job.</p>
       </div>
       <RouterLink to="/settings" class="btn-sm btn inline-flex bg-white text-amber-800 hover:bg-amber-50 border border-amber-300 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700/50 dark:hover:bg-amber-800/40">
@@ -121,7 +121,7 @@
       <!-- Cluster -->
       <section class="card-flush">
         <header class="card-header">
-          <span class="card-title">Cluster Proxmox</span>
+          <span class="card-title">{{ t('home.cluster') }}</span>
           <span v-if="data.cluster.length" class="pill">{{ data.cluster.length }} nodes</span>
         </header>
         <div class="px-5 py-2">
@@ -155,7 +155,7 @@
     <!-- Recent jobs -->
     <section class="card-flush mt-6">
       <header class="card-header">
-        <span class="card-title">Jobs récents</span>
+        <span class="card-title">{{ t('home.recentJobs') }}</span>
         <RouterLink to="/history" class="btn-ghost btn-sm">
           Voir tout
           <Icon name="arrow_right" :size="14" />
@@ -174,9 +174,9 @@
             <tr>
               <th>Nom</th>
               <th>Client</th>
-              <th>Mode</th>
+              <th>{{ t('history.columns.mode') }}</th>
               <th>Date</th>
-              <th>Statut</th>
+              <th>{{ t('history.columns.status') }}</th>
               <th class="text-right pr-5">Actions</th>
             </tr>
           </thead>

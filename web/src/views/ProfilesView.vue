@@ -3,7 +3,7 @@
     <PageHeader
       :eyebrow="t('profiles.title')"
       :title="t('profiles.title')"
-      description="Définissez les workloads testés (taille de bloc, ratio read/write, pattern), ainsi que les seuils de validation pass/fail."
+      :description="t('profiles.description')"
     >
       <template #actions>
         <button class="btn-primary btn-sm" @click="showImport = true">
@@ -58,7 +58,7 @@
                 v-if="profile.description"
                 class="text-sm fg-secondary mt-1"
               >{{ profile.description }}</p>
-              <p v-else class="text-sm fg-faint italic mt-1">Aucune description</p>
+              <p v-else class="text-sm fg-faint italic mt-1">{{ t('common.noDescription') }}</p>
 
               <div
                 v-if="parsedThresholds(profile)"
@@ -134,7 +134,7 @@
               <Icon v-else name="check" :size="14" />
               Sauvegarder
             </button>
-            <button class="btn-ghost btn-sm" @click="editId = null; editError = ''">Annuler</button>
+            <button class="btn-ghost btn-sm" @click="editId = null; editError = ''">{{ t("common.cancel") }}</button>
           </div>
         </div>
       </div>
@@ -173,7 +173,7 @@
             </div>
           </div>
           <div class="flex items-center justify-end gap-2 pt-1">
-            <button class="btn-ghost" @click="showImport = false; importError = ''">Annuler</button>
+            <button class="btn-ghost" @click="showImport = false; importError = ''">{{ t("common.cancel") }}</button>
             <button class="btn-primary" :disabled="importing" @click="doImport">
               <Spinner v-if="importing" :size="14" />
               <Icon v-else name="upload" :size="14" />
