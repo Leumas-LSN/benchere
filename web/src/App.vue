@@ -75,11 +75,11 @@
         <button
           type="button"
           class="w-full h-9 flex items-center gap-2 px-3 rounded-lg fg-muted hover:fg-primary hover:bg-soft transition-colors text-xs"
-          :aria-label="sidebarOpen ? 'Replier la barre latérale' : 'Déplier la barre latérale'"
+          :aria-label="sidebarOpen ? t('app.sidebar.collapseAria') : t('app.sidebar.expandAria')"
           @click="sidebarOpen = !sidebarOpen"
         >
           <Icon :name="sidebarOpen ? 'chevron_left' : 'chevron_right'" :size="14" />
-          <span v-if="sidebarOpen">Replier</span>
+          <span v-if="sidebarOpen">{{ t('app.collapse') }}</span>
         </button>
       </div>
     </aside>
@@ -139,13 +139,13 @@ const sidebarOpen = ref(true)
 const apiOnline   = ref(true)
 const appVersion  = ref('')
 
-const navLinks = [
-  { to: '/',         icon: 'home',    label: 'Accueil' },
-  { to: '/jobs/new', icon: 'play',    label: 'Nouveau job' },
-  { to: '/profiles', icon: 'layers',  label: 'Profils' },
-  { to: '/history',  icon: 'history', label: 'Historique' },
-  { to: '/settings', icon: 'cog',     label: 'Configuration' },
-]
+const navLinks = computed(() => [
+  { to: '/',         icon: 'home',    label: t('nav.home')     },
+  { to: '/jobs/new', icon: 'play',    label: t('nav.newJob')   },
+  { to: '/profiles', icon: 'layers',  label: t('nav.profiles') },
+  { to: '/history',  icon: 'history', label: t('nav.history')  },
+  { to: '/settings', icon: 'cog',     label: t('nav.settings') },
+])
 
 function isActive(link) {
   if (link.to === '/') return route.path === '/'
@@ -154,13 +154,13 @@ function isActive(link) {
 
 const breadcrumb = computed(() => {
   const p = route.path
-  if (p === '/')                  return { icon: 'home',     label: 'Accueil' }
-  if (p === '/jobs/new')          return { icon: 'play',     label: 'Nouveau benchmark' }
-  if (p === '/profiles')          return { icon: 'layers',   label: 'Profils elbencho' }
-  if (p === '/history')           return { icon: 'history',  label: 'Historique' }
-  if (p === '/settings')          return { icon: 'cog',      label: 'Configuration Proxmox' }
-  if (p.startsWith('/dashboard/'))return { icon: 'activity', label: 'Live monitoring', sub: route.params.id }
-  if (p.startsWith('/jobs/'))     return { icon: 'file_text',label: 'Résultats du job', sub: route.params.id }
+  if (p === '/')                  return { icon: 'home',     label: t('breadcrumb.home') }
+  if (p === '/jobs/new')          return { icon: 'play',     label: t('breadcrumb.newJob') }
+  if (p === '/profiles')          return { icon: 'layers',   label: t('breadcrumb.profiles') }
+  if (p === '/history')           return { icon: 'history',  label: t('breadcrumb.history') }
+  if (p === '/settings')          return { icon: 'cog',      label: t('breadcrumb.settings') }
+  if (p.startsWith('/dashboard/'))return { icon: 'activity', label: t('breadcrumb.dashboard'), sub: route.params.id }
+  if (p.startsWith('/jobs/'))     return { icon: 'file_text',label: t('breadcrumb.job'), sub: route.params.id }
   return { icon: 'home', label: 'Benchere' }
 })
 

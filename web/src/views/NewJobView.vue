@@ -1,8 +1,8 @@
 <template>
   <div class="page max-w-4xl">
     <PageHeader
-      eyebrow="Nouveau benchmark"
-      title="Configurer un job"
+      :eyebrow="t('newJob.eyebrow')"
+      :title="t('newJob.title')"
       description="Renseignez l'identité, dimensionnez les workers et choisissez le mode. Le provisioning démarre dès l'envoi du formulaire."
     />
 
@@ -244,7 +244,7 @@
         <button type="submit" class="btn-primary btn-lg" :disabled="submitting">
           <Spinner v-if="submitting" :size="16" />
           <Icon v-else name="play" :size="16" />
-          {{ submitting ? 'Provisionnement…' : 'Provisionner et lancer' }}
+          {{ submitting ? t('newJob.submitting') : t('newJob.submit') }}
         </button>
       </div>
     </form>
@@ -253,6 +253,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter, RouterLink } from 'vue-router'
 import { useJobsStore } from '../stores/jobs.js'
 import { useSettingsStore } from '../stores/settings.js'

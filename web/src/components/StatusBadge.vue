@@ -10,6 +10,9 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t, te } = useI18n()
 
 const props = defineProps({
   status: { type: String, required: true },
@@ -53,15 +56,7 @@ const dot = computed(() => {
 })
 
 const label = computed(() => {
-  const map = {
-    done:         'Terminé',
-    failed:       'Échec',
-    cancelled:    'Annulé',
-    running:      'En cours',
-    provisioning: 'Provision.',
-    pending:      'En attente',
-    ready:        'Prêt',
-  }
-  return map[props.status] ?? props.status
+  const key = `status.${props.status}`
+  return te(key) ? t(key) : props.status
 })
 </script>

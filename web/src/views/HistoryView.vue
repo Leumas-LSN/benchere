@@ -1,15 +1,15 @@
 <template>
   <div class="page">
     <PageHeader
-      eyebrow="Historique"
-      title="Tous les jobs"
+      :eyebrow="t('history.title')"
+      :title="t('history.title')"
       :description="`${jobs.length} job${jobs.length > 1 ? 's' : ''} au total`"
     >
       <template #actions>
         <button class="btn-secondary btn-sm" :disabled="loading" @click="refresh">
           <Spinner v-if="loading" :size="14" />
           <Icon v-else name="refresh" :size="14" />
-          Actualiser
+          {{ t('common.refresh') }}
         </button>
         <button
           v-if="hasHistory"
@@ -137,6 +137,7 @@
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
 import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useJobsStore } from '../stores/jobs.js'

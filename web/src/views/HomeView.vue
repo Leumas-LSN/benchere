@@ -1,15 +1,15 @@
 <template>
   <div class="page">
     <PageHeader
-      eyebrow="Vue d'ensemble"
-      title="Tableau de bord"
+      :eyebrow="t('home.title')"
+      :title="t('home.title')"
       :description="`Synthèse de l'infrastructure et des benchmarks. Mise à jour toutes les ${REFRESH_MS / 1000}s.`"
     >
       <template #actions>
         <button class="btn-secondary btn-sm" :disabled="loading" @click="loadOverview">
           <Spinner v-if="loading" :size="14" />
           <Icon v-else name="refresh" :size="14" />
-          Actualiser
+          {{ t('common.refresh') }}
         </button>
         <RouterLink to="/jobs/new" class="btn-primary btn-sm">
           <Icon name="plus" :size="14" />
@@ -209,6 +209,7 @@
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { api } from '../api/client.js'
 import { useSettingsStore } from '../stores/settings.js'

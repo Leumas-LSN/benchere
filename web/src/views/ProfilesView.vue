@@ -1,14 +1,14 @@
 <template>
   <div class="page">
     <PageHeader
-      eyebrow="Profils elbencho"
-      title="Bibliothèque de profils"
+      :eyebrow="t('profiles.title')"
+      :title="t('profiles.title')"
       description="Définissez les workloads testés (taille de bloc, ratio read/write, pattern), ainsi que les seuils de validation pass/fail."
     >
       <template #actions>
         <button class="btn-primary btn-sm" @click="showImport = true">
           <Icon name="upload" :size="14" />
-          Importer un profil
+          {{ t('profiles.new') }}
         </button>
       </template>
     </PageHeader>
@@ -145,7 +145,7 @@
       <div v-if="showImport" class="modal-backdrop" @click.self="showImport = false">
         <div class="modal-panel p-6 space-y-5">
           <div class="flex items-center justify-between">
-            <h3 class="text-lg font-semibold fg-primary">Importer un profil elbencho</h3>
+            <h3 class="text-lg font-semibold fg-primary">{{ t('profiles.new') }} elbencho</h3>
             <button class="btn-ghost btn-sm h-8 w-8 px-0" @click="showImport = false" aria-label="Fermer">
               <Icon name="x" :size="16" />
             </button>
@@ -187,6 +187,7 @@
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
 import { ref, onMounted } from 'vue'
 import { api } from '../api/client.js'
 import PageHeader from '../components/PageHeader.vue'

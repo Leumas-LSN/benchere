@@ -1,8 +1,8 @@
 <template>
   <div class="page max-w-3xl">
     <PageHeader
-      eyebrow="Configuration"
-      title="Connexion Proxmox"
+      :eyebrow="t('settings.title')"
+      :title="t('settings.title')"
       description="Ces paramètres sont persistés et pré-remplis à chaque visite. Ils sont indispensables pour provisionner les workers."
     />
 
@@ -157,12 +157,12 @@
         <button type="button" class="btn-secondary" :disabled="testing" @click="testConnection">
           <Spinner v-if="testing" :size="14" />
           <Icon v-else name="shield" :size="14" />
-          Tester la connexion
+          {{ t('settings.actions.testConnection') }}
         </button>
         <button type="submit" class="btn-primary" :disabled="saving">
           <Spinner v-if="saving" :size="14" />
           <Icon v-else name="check" :size="14" />
-          Sauvegarder
+          {{ t('common.save') }}
         </button>
       </div>
 
@@ -175,6 +175,7 @@
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useSettingsStore } from '../stores/settings.js'
 import PageHeader from '../components/PageHeader.vue'
