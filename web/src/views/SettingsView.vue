@@ -159,7 +159,7 @@
           </div>
           <div>
             <label class="label">Masque (CIDR)</label>
-            <input v-model="form.worker_cidr" type="number" min="1" max="32" placeholder="24" class="input" />
+            <input v-model="form.worker_cidr" type="text" inputmode="numeric" pattern="[0-9]{1,2}" placeholder="24" class="input" />
             <p class="helper">Préfixe réseau (24 = 255.255.255.0).</p>
           </div>
         </div>
