@@ -72,6 +72,7 @@ func main() {
 		Hub:          hub,
 		Orchestrator: orch,
 		Reporter:     reporter,
+		Version:      Version,
 	}
 
 	log.Printf("benchere %s listening on :%s", Version, cfg.Port)

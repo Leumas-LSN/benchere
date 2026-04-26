@@ -19,6 +19,7 @@ type Server struct {
 	Hub          *ws.Hub
 	Orchestrator *benchmark.Orchestrator
 	Reporter     *report.Generator
+	Version      string
 }
 
 func (s *Server) Router() http.Handler {
@@ -55,6 +56,7 @@ func (s *Server) Router() http.Handler {
 		r.Get("/jobs/{id}/report.pdf", s.reportPDF)
 		r.Get("/jobs/{id}/report.html", s.reportHTML)
 		r.Get("/overview", s.getOverview)
+		r.Get("/version", s.getVersion)
 		r.Get("/profiles", s.listProfiles)
 		r.Post("/profiles", s.createProfile)
 		r.Put("/profiles/{id}", s.updateProfile)

@@ -57,6 +57,11 @@
           <input v-model="form.proxmox_node" type="text" placeholder="pve-01" class="input" />
         </div>
         <div>
+          <label class="label">Identifiant du cluster</label>
+          <input v-model="form.cluster_name" type="text" placeholder="prod-paris" class="input" />
+          <p class="helper">Nom court qui apparaîtra dans le rapport et l'historique.</p>
+        </div>
+        <div>
           <label class="label">Storage pool benchmark</label>
           <p class="helper -mt-1 mb-2">LVM-thin, ZFS, Ceph… Le storage qui hébergera les disques data des workers.</p>
           <div class="flex gap-2">
@@ -219,6 +224,7 @@ const form = reactive({
   proxmox_token_id:     '',
   proxmox_token_secret: '',
   proxmox_node:         '',
+  cluster_name:         '',
   storage_pool:         '',
   image_storage:    '',
   network_bridge:   '',

@@ -44,6 +44,7 @@ export const api = {
 
   // Overview + results
   getOverview:    ()   => request('GET', '/overview'),
+  getVersion:     ()   => request('GET', '/version'),
   getJobResults:  (id) => request('GET', `/jobs/${id}/results`),
 
   // CSV export URL helper (Plan D)

@@ -41,8 +41,15 @@
         </RouterLink>
       </nav>
 
-      <!-- Footer: API status + sidebar toggle -->
+      <!-- Footer: version + API status + sidebar toggle -->
       <div class="px-2 py-3 border-t" style="border-color: var(--border-subtle);">
+        <div
+          v-if="sidebarOpen"
+          class="flex items-center gap-2 px-3 py-1 text-xs fg-muted num mb-1"
+        >
+          <span class="fg-muted">Benchere</span>
+          <span class="ml-auto">{{ appVersion || '—' }}</span>
+        </div>
         <div
           v-if="sidebarOpen"
           class="flex items-center gap-2 px-3 py-2 rounded-lg surface-muted text-xs mb-2"
@@ -128,6 +135,7 @@ useThemeStore()
 const route = useRoute()
 const sidebarOpen = ref(true)
 const apiOnline   = ref(true)
+const appVersion  = ref('')
 
 const navLinks = [
   { to: '/',         icon: 'home',    label: 'Accueil' },
@@ -176,9 +184,13 @@ async function pingApi() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   pingApi()
   pingTimer = setInterval(pingApi, 15000)
+  try {
+    const v = await fetch('/api/version').then(r => r.json())
+    appVersion.value = v.version || ''
+  } catch (_) { /* version endpoint not available, leave empty */ }
   if (window.matchMedia('(max-width: 768px)').matches) sidebarOpen.value = false
 })
 
