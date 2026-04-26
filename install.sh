@@ -190,6 +190,10 @@ else
                  | sed -E 's/.*"([^"]+)"/\1/')
   if [ -n "$ELBENCHO_URL" ]; then
     curl -fL --progress-bar -o /opt/benchere/assets/elbencho_amd64.deb "$ELBENCHO_URL"
+    info "installing elbencho on master"
+    if ! dpkg -i /opt/benchere/assets/elbencho_amd64.deb >/dev/null 2>&1; then
+      apt-get install -y -f -qq >/dev/null 2>&1
+    fi
   else
     info "could not resolve elbencho release URL; storage benchmarks will be unavailable until you place /opt/benchere/assets/elbencho_amd64.deb manually"
   fi
