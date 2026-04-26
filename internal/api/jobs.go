@@ -104,7 +104,7 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		DataDiskGB:    req.DataDiskGB,
 		ProxmoxNode:   strings.ToLower(proxmoxNode),
 		StoragePool:   storagePool,
-		CloudImageURL: "http://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2",
+		CloudImageURL: "http://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2",
 		ImageStorage:  imageStorage,
 		Profiles:      req.Profiles,
 		StressConfig:  req.StressConfig,
