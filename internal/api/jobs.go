@@ -29,6 +29,7 @@ type createJobRequest struct {
 	OSDiskGB     int            `json:"os_disk_gb"`
 	DataDisks    int            `json:"data_disks"`
 	DataDiskGB   int            `json:"data_disk_gb"`
+	StoragePool  string         `json:"storage_pool,omitempty"`
 	Profiles     []string       `json:"profiles"`
 	StressConfig *stress.Config `json:"stress_config,omitempty"`
 }
@@ -71,6 +72,9 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 	proxmoxURL, _ := s.DB.GetSetting("proxmox_url")
 	proxmoxToken, _ := s.DB.GetSetting("proxmox_token")
 	storagePool, _ := s.DB.GetSetting("storage_pool")
+	if req.StoragePool != "" {
+		storagePool = req.StoragePool
+	}
 	proxmoxNode, _ := s.DB.GetSetting("proxmox_node")
 	imageStorage, _ := s.DB.GetSetting("image_storage")
 

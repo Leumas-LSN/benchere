@@ -57,42 +57,6 @@
           <input v-model="form.proxmox_node" type="text" placeholder="pve-01" class="input" />
         </div>
         <div>
-          <label class="label">Identifiant du cluster</label>
-          <input v-model="form.cluster_name" type="text" placeholder="prod-paris" class="input" />
-          <p class="helper">Nom court qui apparaîtra dans le rapport et l'historique.</p>
-        </div>
-        <div>
-          <label class="label">Storage pool benchmark</label>
-          <p class="helper -mt-1 mb-2">LVM-thin, ZFS, Ceph… Le storage qui hébergera les disques data des workers.</p>
-          <div class="flex gap-2">
-            <select v-if="storages.length" v-model="form.storage_pool" class="select flex-1">
-              <option value="">— choisir un pool —</option>
-              <option v-for="s in storages" :key="s.id" :value="s.id">
-                {{ s.id }} ({{ s.type }})
-              </option>
-            </select>
-            <input
-              v-else
-              v-model="form.storage_pool"
-              type="text"
-              placeholder="local-lvm"
-              class="input flex-1"
-            />
-            <button
-              type="button"
-              class="btn-secondary whitespace-nowrap"
-              :disabled="scanning"
-              @click="scanStorages"
-            >
-              <Spinner v-if="scanning" :size="14" />
-              <Icon v-else name="search" :size="14" />
-              Scanner
-            </button>
-          </div>
-          <p v-if="scanError" class="helper text-red-600 dark:text-red-400 mt-2">{{ scanError }}</p>
-        </div>
-
-        <div>
           <label class="label">Image storage</label>
           <p class="helper -mt-1 mb-2">
             Stockage utilisé pour télécharger l'image cloud Debian 12. Doit être de type
@@ -224,8 +188,6 @@ const form = reactive({
   proxmox_token_id:     '',
   proxmox_token_secret: '',
   proxmox_node:         '',
-  cluster_name:         '',
-  storage_pool:         '',
   image_storage:    '',
   network_bridge:   '',
   worker_ip_pool:   '',

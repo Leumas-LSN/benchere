@@ -40,6 +40,46 @@
         </div>
       </section>
 
+      <!-- Storage pools -->
+      <section class="card space-y-4">
+        <header class="flex items-center justify-between">
+          <h2 class="text-sm font-semibold fg-primary">Storage pools à benchmarker</h2>
+          <span class="card-title">Étape 2 / 5</span>
+        </header>
+        <p class="helper">Sélectionne un ou plusieurs pools. Un job indépendant sera créé pour chaque pool, exécutés à la suite.</p>
+        <div v-if="storagesLoading" class="text-sm fg-muted">Chargement des storage pools…</div>
+        <div v-else-if="storagesError" class="text-sm text-red-600 dark:text-red-400">{{ storagesError }}</div>
+        <div v-else-if="!availableStorages.length" class="text-sm fg-muted">Aucun storage trouvé. Vérifie ta configuration Proxmox.</div>
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <label
+            v-for="s in availableStorages"
+            :key="s.id"
+            :class="[
+              'flex items-center gap-3 cursor-pointer rounded-lg border p-3 transition-colors',
+              form.storage_pools.includes(s.id)
+                ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/10'
+                : 'border-default hover:border-strong'
+            ]"
+          >
+            <input type="checkbox" :value="s.id" v-model="form.storage_pools" class="sr-only peer" />
+            <span
+              :class="[
+                'w-4 h-4 rounded flex items-center justify-center shrink-0 transition-all',
+                form.storage_pools.includes(s.id)
+                  ? 'bg-brand-500 text-white'
+                  : 'border border-default bg-elevated'
+              ]"
+            >
+              <Icon v-if="form.storage_pools.includes(s.id)" name="check" :size="11" stroke-width="3" />
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium fg-primary truncate">{{ s.id }}</p>
+              <p class="text-xs fg-muted">{{ s.type }}</p>
+            </div>
+          </label>
+        </div>
+      </section>
+
       <!-- Workers -->
       <section class="card space-y-5">
         <header class="flex items-center justify-between">
@@ -239,6 +279,9 @@ const stressors = ['cpu', 'vm', 'io', 'hdd']
 const profiles   = ref([])
 const submitting = ref(false)
 const error      = ref('')
+const availableStorages = ref([])
+const storagesLoading   = ref(true)
+const storagesError     = ref('')
 
 const form = reactive({
   name:          '',
@@ -250,6 +293,7 @@ const form = reactive({
   os_disk_gb:    20,
   data_disks:    1,
   data_disk_gb:  50,
+  storage_pools: [],
   profiles:      [],
   stress_config: { workers: 4, timeout: 120, stressors: ['cpu'] },
 })
@@ -259,6 +303,18 @@ watch(() => form.mode, () => { error.value = '' })
 onMounted(async () => {
   try { settings.value = await settingsStore.load() } catch (_) {}
   try { profiles.value = await api.listProfiles() ?? [] } catch (_) {}
+  try {
+    const all = await settingsStore.scanStorages() ?? []
+    // Only keep storages that can host VM disks (content includes "images")
+    availableStorages.value = all.filter(s => (s.content || '').split(',').map(c => c.trim()).includes('images'))
+    if (!availableStorages.value.length) {
+      storagesError.value = 'Aucun storage compatible (content "images") trouvé sur ce cluster.'
+    }
+  } catch (e) {
+    storagesError.value = 'Erreur récupération storages : ' + e.message
+  } finally {
+    storagesLoading.value = false
+  }
 })
 
 async function submit() {
@@ -267,7 +323,12 @@ async function submit() {
     error.value = 'Sélectionnez au moins un profil elbencho.'
     return
   }
-  const payload = {
+  if (form.storage_pools.length === 0) {
+    error.value = 'Sélectionnez au moins un storage pool.'
+    return
+  }
+
+  const basePayload = {
     name:          form.name,
     client_name:   form.client_name,
     mode:          form.mode,
@@ -283,10 +344,22 @@ async function submit() {
       stressors: [...form.stress_config.stressors],
     },
   }
+
   submitting.value = true
   try {
-    const id = await jobsStore.createJob(payload)
-    router.push(`/dashboard/${id}`)
+    const ids = []
+    for (const pool of form.storage_pools) {
+      // Suffix the name with the pool when running on multiple, so each job
+      // is identifiable in the history without losing the user's chosen name.
+      const name = form.storage_pools.length > 1 ? `${form.name} · ${pool}` : form.name
+      const id = await jobsStore.createJob({ ...basePayload, name, storage_pool: pool })
+      ids.push(id)
+    }
+    if (ids.length === 1) {
+      router.push(`/dashboard/${ids[0]}`)
+    } else {
+      router.push('/history')
+    }
   } catch (e) {
     error.value = 'Erreur : ' + e.message
     submitting.value = false
