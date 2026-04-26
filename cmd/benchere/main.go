@@ -32,6 +32,7 @@ func main() {
 	defer database.Close()
 
 	sshKeyPath  := envOr("BENCHERE_SSH_KEY", "/opt/benchere/id_rsa")
+	log.Printf("[startup] sshKeyPath=%q", sshKeyPath)
 	playbookDir := envOr("BENCHERE_PLAYBOOK_DIR", "/opt/benchere/ansible/playbooks")
 	elbenchoDeb := envOr("BENCHERE_ELBENCHO_DEB", "/opt/benchere/assets/elbencho_amd64.deb")
 	profilesDir := envOr("BENCHERE_PROFILES_DIR", "/opt/benchere/profiles")
