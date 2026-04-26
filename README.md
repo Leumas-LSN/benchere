@@ -63,14 +63,14 @@ Once the wizard finishes, the dashboard is ready and the **New job** flow become
 
 ```mermaid
 flowchart LR
-  user["Engineer"] -->|HTTPS| master["Master VM<br/>(this binary)"]
+  user["Engineer"] -->|HTTPS| master["Master VM"]
   master -->|REST + token| pve["Proxmox VE API"]
-  master -->|SSH + key| workers["Worker VMs (N)"]
-  master -->|persists| db[("SQLite<br/>jobs · results · profiles")]
+  master -->|SSH + key| workers["N worker VMs"]
+  master -->|persists| db[("SQLite — jobs, results, profiles")]
   pve -->|cloud-init| workers
-  workers -->|elbencho service<br/>(distributed)| workers
+  workers -->|elbencho distributed| workers
   workers -->|stress-ng| workers
-  workers -->|live metrics<br/>via WS| user
+  workers -->|live metrics over WS| user
 ```
 
 Single Go binary, single deployable artifact:
