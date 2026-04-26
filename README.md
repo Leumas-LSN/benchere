@@ -1,151 +1,152 @@
+<div align="center">
+
 # Benchere
 
-> Storage and CPU benchmark tool for virtualization engineers — Proxmox-first, multi-hypervisor next.
+**Infrastructure benchmark toolkit for virtualization engineers.**
 
-[Français](#français) · [English](#english)
+Provision ephemeral workers, run distributed storage and CPU benchmarks against a Proxmox cluster, deliver a presentable PDF report.
+
+[![Latest release](https://img.shields.io/github/v/release/Leumas-LSN/benchere?style=flat-square&color=f97316)](https://github.com/Leumas-LSN/benchere/releases/latest)
+[![Build status](https://img.shields.io/github/actions/workflow/status/Leumas-LSN/benchere/release.yml?style=flat-square)](https://github.com/Leumas-LSN/benchere/actions)
+[![Go version](https://img.shields.io/badge/go-1.25-00ADD8?style=flat-square&logo=go&logoColor=white)](go.mod)
+[![Vue 3](https://img.shields.io/badge/vue-3-42b883?style=flat-square&logo=vue.js&logoColor=white)](web/package.json)
+[![License](https://img.shields.io/badge/license-MIT-555?style=flat-square)](LICENSE)
+
+[Quick start](#quick-start) · [Features](#features) · [Architecture](#architecture) · [Build from source](#build-from-source) · [Roadmap](#roadmap)
+
+</div>
 
 ---
 
-## English
+## Why Benchere
 
-Benchere measures the storage (via [elbencho](https://github.com/breuner/elbencho)) and CPU (via [stress-ng](https://github.com/ColinIanKing/stress-ng)) performance of a Proxmox cluster on demand, then turns the run into a PDF that you can hand to a client at a delivery meeting.
+Storage and CPU performance validation on a freshly delivered Proxmox cluster is traditionally a manual chore: SSH into a node, run a script, eyeball the numbers, transcribe them into a slide deck. Results are inconsistent, comparisons across clients are impossible, and there is no presentable artifact at the end.
 
-One job, a set of elbencho profiles, a report, a pass/fail verdict against thresholds.
+Benchere standardizes the workflow:
 
-### How it works
+- **One job** describes a target node, a worker shape, the storage pools to test, and the elbencho profiles to run.
+- **One report** comes out — a dark-themed PDF with per-profile pass/fail verdicts based on configurable thresholds.
+- **One binary** runs the whole stack: REST API, WebSocket live feed, embedded Vue 3 frontend, SQLite persistence.
 
-1. Connect Benchere to a Proxmox cluster (API URL + token).
-2. Start a job: pick the node, storage pools, worker shape (vCPU/RAM/disks), and elbencho profiles.
-3. Benchere provisions ephemeral Debian VMs via cloud-init, configures them with Ansible, runs the distributed benchmark, then tears the workers down.
-4. Download the PDF report.
+## Quick start
 
-### Install
-
-On any fresh Debian 12+ or Ubuntu 22.04+ VM (or LXC container) with internet access, run:
+The installer runs on any Debian 12+ or Ubuntu 22.04+ VM or LXC container with internet access. From the target machine, as root:
 
 ```bash
 curl -fsSL https://github.com/Leumas-LSN/benchere/releases/latest/download/install.sh | sudo bash
 ```
 
-Then open `http://<vm-ip>/` and follow the onboarding wizard. The wizard walks you through:
+Then open `http://<vm-ip>/` in a browser. The first visit launches an onboarding wizard that walks through:
 
-1. Language (FR/EN).
-2. Hypervisor selection (Proxmox supported today; vSphere, Hyper-V, Azure Local listed for V2).
-3. Cluster connection (API URL, token id/secret, deployment node, cluster identifier).
-4. Worker network (bridge, static IP pool, CIDR, gateway).
-5. SSH key path used by Ansible to reach the workers.
+1. **Language** — French or English (persisted, switchable later).
+2. **Hypervisor** — Proxmox today; vSphere, Hyper-V and Azure Local listed as upcoming targets.
+3. **Cluster connection** — API URL, token id/secret, deployment node, cluster identifier.
+4. **Worker network** — bridge, static IP pool, CIDR, gateway.
+5. **SSH key path** — used by Ansible to reach the worker VMs.
 
-### Architecture
+Once the wizard finishes, the dashboard is ready and the **New job** flow becomes available.
 
-Single Go binary that serves the REST API, the WebSocket live feed and the embedded Vue3 frontend. SQLite for persistence. Ansible for worker provisioning.
+## Features
+
+| Capability | Detail |
+|---|---|
+| Storage benchmarks | Distributed `elbencho` runs across N workers, IOPS read/write, throughput, latency p50 and p99. |
+| CPU benchmarks | `stress-ng` over SSH on the workers, configurable stressors and timeouts. |
+| Worker lifecycle | Cloud-init provisioning from a Debian generic image, static IP allocation from a user-defined pool, automatic teardown after the job completes. |
+| Live monitoring | WebSocket feed, per-worker CPU / RAM / network / disk I/O updated every 2 seconds during the run. |
+| Profile thresholds | Each elbencho profile carries optional pass/fail thresholds (min IOPS, max latency) that drive the verdict in the report. |
+| Multi-pool runs | Pick several storage pools at job creation; one independent run per pool, named for unambiguous comparison. |
+| PDF & HTML reports | Dark-themed by default, switchable to print mode. Localized to the user's chosen language. |
+| Internationalization | Full FR / EN locales for the UI and the reports. |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  user["Engineer"] -->|HTTPS| master["Master VM<br/>(this binary)"]
+  master -->|REST + token| pve["Proxmox VE API"]
+  master -->|SSH + key| workers["Worker VMs (N)"]
+  master -->|persists| db[("SQLite<br/>jobs · results · profiles")]
+  pve -->|cloud-init| workers
+  workers -->|elbencho service<br/>(distributed)| workers
+  workers -->|stress-ng| workers
+  workers -->|live metrics<br/>via WS| user
+```
+
+Single Go binary, single deployable artifact:
 
 ```
 cmd/benchere/        entry point
 internal/
   api/               REST + WebSocket handlers
   proxmox/           Proxmox VE API client
+  proxmoxhost/       (reserved for V2 host-side ops)
   ansible/           Ansible runner
   elbencho/          orchestration + live CSV parser
   stress/            stress-ng over SSH
-  benchmark/         state machine + job orchestrator + IP allocator
+  benchmark/         job orchestrator + IP allocator
   report/            HTML/PDF rendering + SVG charts
   ws/                WebSocket hub
   db/                SQLite migrations + queries
-web/                 Vue3 + Tailwind source
+web/                 Vue 3 + Tailwind source (embedded via go:embed)
+ansible/             worker provisioning playbooks
 ```
 
-### Stack
+## Stack
 
-- **Backend:** Go, SQLite (`modernc.org/sqlite`), Gorilla WebSocket
-- **Frontend:** Vue3 (Composition API), Pinia, Vue Router, Tailwind CSS, Vite, vue-i18n
-- **Provisioning:** Ansible, Proxmox VE API
-- **Storage benchmark:** elbencho in distributed mode (`--hosts`)
-- **CPU benchmark:** stress-ng over SSH
-- **PDF rendering:** wkhtmltopdf
+- **Backend** — Go 1.25, Gorilla WebSocket, `modernc.org/sqlite` (pure Go, no CGO).
+- **Frontend** — Vue 3 Composition API, Pinia, Vue Router, Tailwind CSS, Vite, vue-i18n.
+- **Provisioning** — Ansible 2.x, Proxmox VE 8/9 REST API, cloud-init NoCloud.
+- **Storage benchmark** — [elbencho](https://github.com/breuner/elbencho) in distributed mode (`--hosts`).
+- **CPU benchmark** — [stress-ng](https://github.com/ColinIanKing/stress-ng) over SSH.
+- **PDF rendering** — wkhtmltopdf.
+- **CI** — GitHub Actions builds the Linux/amd64 binary on every tag, attaches it alongside `install.sh` to the release.
 
-### Build from source
+## Screenshots
+
+Screenshots of the live dashboard, the job wizard and the PDF report are available in [`docs/screenshots/`](docs/screenshots/) (placeholder — populate during the next release cycle).
+
+## Build from source
+
+Prerequisites: Go 1.25+, Node.js 20+, npm, GNU Make.
 
 ```bash
-make build       # builds web/dist + the Go binary
+git clone https://github.com/Leumas-LSN/benchere.git
+cd benchere
+make build       # builds web/dist via Vite, then the Go binary
 make test
-make clean
 ```
 
-The binary embeds the frontend via `//go:embed`, so any change in `web/` requires a Go rebuild.
+The binary embeds the frontend bundle via `//go:embed`. Any change in `web/src/` requires a Go rebuild to take effect at runtime.
 
-### Status
-
-V1 — internal-network deployment only (no auth), Proxmox-only. V2 will introduce a `Hypervisor` interface for vSphere / Hyper-V / Azure Local.
-
----
-
-## Français
-
-Benchere mesure les performances stockage (via [elbencho](https://github.com/breuner/elbencho)) et CPU (via [stress-ng](https://github.com/ColinIanKing/stress-ng)) d'un cluster Proxmox à la demande, puis transforme le run en PDF présentable à un client en réunion de recette.
-
-Un job, une liste de profils elbencho, un rapport, un verdict pass/fail face à des seuils.
-
-### Comment ça marche
-
-1. Tu connectes Benchere à un cluster Proxmox (URL API + token).
-2. Tu lances un job : choix du node, des storage pools, dimensionnement des workers (vCPU/RAM/disques) et des profils elbencho.
-3. Benchere provisionne des VMs Debian éphémères via cloud-init, les configure via Ansible, lance le benchmark en distribué, puis détruit les workers.
-4. Tu télécharges le rapport PDF.
-
-### Installation
-
-Sur n'importe quelle VM Debian 12+ ou Ubuntu 22.04+ fraîche (ou un container LXC) avec accès internet :
+To produce a versioned release locally:
 
 ```bash
-curl -fsSL https://github.com/Leumas-LSN/benchere/releases/latest/download/install.sh | sudo bash
+make build VERSION=v1.7.0   # stamps main.Version via -ldflags
 ```
 
-Ouvre ensuite `http://<ip-vm>/` et suis l'assistant d'onboarding. Il te demandera :
+## Configuration
 
-1. La langue (FR/EN).
-2. Le choix de l'hyperviseur (Proxmox aujourd'hui ; vSphere, Hyper-V, Azure Local en V2).
-3. Les paramètres de connexion au cluster (URL API, token id/secret, node, identifiant de cluster).
-4. Le réseau workers (bridge, plage d'IPs statiques, CIDR, passerelle).
-5. Le chemin de la clé SSH utilisée par Ansible.
+Runtime configuration is read from a few environment variables (defaults in parentheses):
 
-### Architecture
+| Variable | Default | Purpose |
+|---|---|---|
+| `BENCHERE_PORT` | `80` | HTTP listen port |
+| `BENCHERE_DB` | `/opt/benchere/benchere.db` | SQLite database path |
+| `BENCHERE_DEBUG` | `false` | Verbose request logging |
+| `BENCHERE_SSH_KEY` | `/opt/benchere/id_rsa` | Private key Ansible uses to reach workers |
 
-Binaire Go unique qui sert l'API REST, le flux WebSocket temps réel et le frontend Vue3 embedé. SQLite pour la persistance. Ansible pour la configuration des workers.
+All other settings (Proxmox URL/token/node, storage, network bridge, IP pool, cluster name) live in the SQLite database and are managed through the onboarding wizard or the **Settings** page.
 
-```
-cmd/benchere/        point d'entrée
-internal/
-  api/               handlers REST + WebSocket
-  proxmox/           client API Proxmox VE
-  ansible/           runner Ansible
-  elbencho/          orchestration + parsing CSV live
-  stress/            stress-ng via SSH
-  benchmark/         state machine + orchestrateur de jobs + allocateur d'IPs
-  report/            rendu HTML/PDF + charts SVG
-  ws/                hub WebSocket
-  db/                migrations + queries SQLite
-web/                 source Vue3 + Tailwind
-```
+## Roadmap
 
-### Stack
+V1 (current) targets Proxmox VE in an internal-network deployment without authentication. V2 will introduce:
 
-- **Backend :** Go, SQLite (`modernc.org/sqlite`), Gorilla WebSocket
-- **Frontend :** Vue3 (Composition API), Pinia, Vue Router, Tailwind CSS, Vite, vue-i18n
-- **Provisioning :** Ansible, API Proxmox VE
-- **Benchmark stockage :** elbencho en mode distribué (`--hosts`)
-- **Benchmark CPU :** stress-ng via SSH
-- **Rendu PDF :** wkhtmltopdf
+- A `Hypervisor` interface to support **VMware vSphere**, **Microsoft Hyper-V** and **Azure Local** alongside Proxmox.
+- An optional authentication layer for installs that face untrusted networks.
+- A worker template builder to skip the cloud-image import on every run.
+- Long-term metrics retention beyond the SQLite size limit (Prometheus or InfluxDB sink).
 
-### Build depuis les sources
+## License
 
-```bash
-make build       # build web/dist + binaire Go
-make test
-make clean
-```
-
-Le binaire embed le frontend via `//go:embed` : tout changement dans `web/` nécessite un rebuild Go.
-
-### Statut
-
-V1 — déploiement réseau interne uniquement (pas d'authentification), Proxmox seulement. V2 introduira une interface `Hypervisor` pour vSphere / Hyper-V / Azure Local.
+MIT — see [LICENSE](LICENSE).
