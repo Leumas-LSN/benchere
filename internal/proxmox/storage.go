@@ -12,7 +12,7 @@ import (
 
 // EnsureCloudImage downloads a cloud image to Proxmox storage if not already present.
 // imageStorage must support 'import' content (e.g. local dir-type storage).
-// Returns the volume ID (e.g. "local:import/debian-12-genericcloud-amd64.qcow2").
+// Returns the volume ID (e.g. "local:import/debian-12-generic-amd64.qcow2").
 func (c *Client) EnsureCloudImage(ctx context.Context, node, storage, imageURL string) (string, error) {
 	filename := imageURL[strings.LastIndex(imageURL, "/")+1:]
 	expectedVolid := storage + ":import/" + filename

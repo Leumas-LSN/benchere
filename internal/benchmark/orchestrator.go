@@ -160,7 +160,7 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 			DataDisks:   cfg.DataDisks,
 			DataDiskGB:  cfg.DataDiskGB,
 			StoragePool: cfg.StoragePool,
-			SSHKey:      func() string { c := readFile(o.SSHKey + ".pub"); log.Printf("[orch] o.SSHKey=%q content=%d bytes", o.SSHKey, len(c)); return c }(),
+			SSHKey:      readFile(o.SSHKey + ".pub"),
 			ImagePath:   imageVol,
 			Bridge:      networkBridge,
 		}); err != nil {
