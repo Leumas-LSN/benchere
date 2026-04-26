@@ -104,7 +104,7 @@ ansible/             worker provisioning playbooks
 
 ## Screenshots
 
-Screenshots of the live dashboard, the job wizard and the PDF report are available in [`docs/screenshots/`](docs/screenshots/) (placeholder — populate during the next release cycle).
+Screenshots of the live dashboard, the job wizard and the PDF report are available in [`docs/screenshots/`](docs/screenshots/).
 
 ## Build from source
 
