@@ -101,7 +101,7 @@ fi
 info "installing OS dependencies (apt)"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-APT_PACKAGES=(ansible curl wget openssh-client ca-certificates python3)
+APT_PACKAGES=(ansible curl wget openssh-client ca-certificates python3 wkhtmltopdf)
 # qemu-guest-agent is only meaningful in a real VM, harmless but useless in LXC.
 # Install it only if we're in a VM (systemd-detect-virt reports kvm/qemu/vmware/etc, not 'lxc').
 if command -v systemd-detect-virt >/dev/null 2>&1; then
