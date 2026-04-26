@@ -142,6 +142,34 @@
         </div>
       </section>
 
+      <!-- Worker network -->
+      <section class="card space-y-5">
+        <header class="flex items-center justify-between">
+          <h2 class="text-sm font-semibold fg-primary">Réseau workers</h2>
+          <span class="card-title">IPs statiques</span>
+        </header>
+        <p class="helper -mt-2">
+          Plage d'IPs assignées aux workers via cloud-init. Évite la dépendance à <span class="code-inline">qemu-guest-agent</span> (souvent absent des images cloud) pour découvrir leur adresse. Laisse vide pour utiliser DHCP + agent (legacy).
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="label">Plage d'IPs workers</label>
+            <input v-model="form.worker_ip_pool" type="text" placeholder="10.90.0.200-10.90.0.220" class="input" />
+            <p class="helper">Format <span class="code-inline">A.B.C.D-A.B.C.E</span>, inclusif.</p>
+          </div>
+          <div>
+            <label class="label">Masque (CIDR)</label>
+            <input v-model="form.worker_cidr" type="number" min="1" max="32" placeholder="24" class="input" />
+            <p class="helper">Préfixe réseau (24 = 255.255.255.0).</p>
+          </div>
+        </div>
+        <div>
+          <label class="label">Passerelle</label>
+          <input v-model="form.worker_gateway" type="text" placeholder="10.90.0.1" class="input" />
+          <p class="helper">IP du routeur du segment réseau des workers.</p>
+        </div>
+      </section>
+
       <!-- SSH -->
       <section class="card space-y-5">
         <header class="flex items-center justify-between">
@@ -194,6 +222,9 @@ const form = reactive({
   storage_pool:         '',
   image_storage:    '',
   network_bridge:   '',
+  worker_ip_pool:   '',
+  worker_cidr:      '24',
+  worker_gateway:   '',
   ssh_key_path:     '/opt/benchere/id_rsa',
 })
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -26,6 +27,7 @@ type VMCreateParams struct {
 	DataDiskGB  int
 	Bridge      string
 	Cicustom    string
+	IPConfig    string
 }
 
 type VMStatus struct {
@@ -63,7 +65,11 @@ func (c *Client) CreateVM(ctx context.Context, p VMCreateParams) (int, error) {
 	}
 	form.Set("net0", "virtio,bridge="+bridge)
 	form.Set("ide2", p.StoragePool+":cloudinit")
-	form.Set("ipconfig0", "ip=dhcp")
+	ipConfig := p.IPConfig
+	if ipConfig == "" {
+		ipConfig = "ip=dhcp"
+	}
+	form.Set("ipconfig0", ipConfig)
 	form.Set("ciuser", "root")
 	encodedKey := strings.ReplaceAll(url.QueryEscape(strings.TrimSpace(p.SSHKey)), "+", "%20")
 	form.Set("sshkeys", encodedKey)
@@ -269,4 +275,59 @@ func (c *Client) InjectSSHKey(ctx context.Context, node string, vmid int, pubkey
 		}
 	}
 	return fmt.Errorf("ssh key injection timed out")
+}
+
+// ListVMIDs returns all VM IDs declared on a node, regardless of state.
+// Used by the IP allocator to find which addresses are already in use
+// before assigning a static IP to a new worker.
+func (c *Client) ListVMIDs(ctx context.Context, node string) ([]int, error) {
+	var raw []struct {
+		VMID int `json:"vmid"`
+	}
+	if err := c.getJSON(ctx, fmt.Sprintf("/nodes/%s/qemu", node), &raw); err != nil {
+		return nil, err
+	}
+	ids := make([]int, 0, len(raw))
+	for _, r := range raw {
+		ids = append(ids, r.VMID)
+	}
+	return ids, nil
+}
+
+// GetVMIPConfig0 returns the cloud-init ipconfig0 string of a VM, e.g.
+// "ip=10.90.0.200/24,gw=10.90.0.1" or "ip=dhcp". Returns "" when unset.
+func (c *Client) GetVMIPConfig0(ctx context.Context, node string, vmid int) (string, error) {
+	var raw struct {
+		IPConfig0 string `json:"ipconfig0"`
+	}
+	if err := c.getJSON(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/config", node, vmid), &raw); err != nil {
+		return "", err
+	}
+	return raw.IPConfig0, nil
+}
+
+// WaitForSSH polls TCP 22 on the given IP until a connection succeeds, or
+// the 5-minute deadline is reached. Used after assigning a static IP via
+// cloud-init: we already know the worker's IP so we don't need the QEMU
+// guest agent to discover it. As soon as sshd accepts a TCP connection the
+// VM is ready for Ansible.
+func (c *Client) WaitForSSH(ctx context.Context, ip string) error {
+	deadline := time.Now().Add(5 * time.Minute)
+	dialer := net.Dialer{Timeout: 3 * time.Second}
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(ip, "22"))
+		if err == nil {
+			conn.Close()
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("ssh on %s not reachable after 5m", ip)
+		}
+		time.Sleep(3 * time.Second)
+	}
 }

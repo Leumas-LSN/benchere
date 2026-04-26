@@ -5,9 +5,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/Leumas-LSN/benchere/internal/ansible"
@@ -133,6 +135,27 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 	}
 	networkBridge, _ := o.DB.GetSetting("network_bridge")
 
+	// Static IP allocation: when worker_ip_pool / worker_cidr / worker_gateway
+	// are set we assign each worker an address from the pool via cloud-init's
+	// ipconfig0. This sidesteps the qemu-guest-agent IP discovery that's
+	// brittle on cloud images that don't ship the agent.
+	var staticIPs []net.IP
+	var pool IPPool
+	if poolStr, _ := o.DB.GetSetting("worker_ip_pool"); poolStr != "" {
+		cidrStr, _ := o.DB.GetSetting("worker_cidr")
+		cidr, _ := strconv.Atoi(cidrStr)
+		gateway, _ := o.DB.GetSetting("worker_gateway")
+		p, err := ParseIPPool(poolStr, cidr, gateway)
+		if err != nil {
+			return o.fail(job.ID, fmt.Errorf("worker network: %w", err))
+		}
+		pool = p
+		staticIPs, err = AllocateIPs(ctx, o.Proxmox, cfg.ProxmoxNode, pool, cfg.WorkerCount)
+		if err != nil {
+			return o.fail(job.ID, err)
+		}
+	}
+
 	o.emitProvStep(job.ID, "vm_creating", "Création des machines virtuelles...", 0.05)
 	var workerIPs []string
 	var workerDBIDs []string
@@ -150,6 +173,13 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 		w := db.Worker{ID: workerID, JobID: job.ID, VMID: vmid, ProxmoxNode: cfg.ProxmoxNode, Status: "provisioning"}
 		_ = o.DB.CreateWorker(w)
 
+		ipConfig := ""
+		var assignedIP string
+		if len(staticIPs) > 0 {
+			assignedIP = staticIPs[i].String()
+			ipConfig = pool.IPConfig(staticIPs[i])
+		}
+
 		if _, err := o.Proxmox.CreateVM(ctx, proxmox.VMCreateParams{
 			Node:        cfg.ProxmoxNode,
 			VMID:        vmid,
@@ -163,18 +193,32 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 			SSHKey:      readFile(o.SSHKey + ".pub"),
 			ImagePath:   imageVol,
 			Bridge:      networkBridge,
+			IPConfig:    ipConfig,
 		}); err != nil {
 			return o.fail(job.ID, fmt.Errorf("create vm %d: %w", vmid, err))
 		}
 		if err := o.Proxmox.StartVM(ctx, cfg.ProxmoxNode, vmid); err != nil {
 			return o.fail(job.ID, err)
 		}
-		ip, err := o.Proxmox.WaitForIP(ctx, cfg.ProxmoxNode, vmid)
-		if err != nil {
-			return o.fail(job.ID, err)
-		}
-		if err := o.Proxmox.InjectSSHKey(ctx, cfg.ProxmoxNode, vmid, readFile(o.SSHKey+".pub")); err != nil {
-			return o.fail(job.ID, fmt.Errorf("inject ssh key vm %d: %w", vmid, err))
+
+		var ip string
+		if assignedIP != "" {
+			// Static IP path: we already know it. Just wait for sshd to come up.
+			if err := o.Proxmox.WaitForSSH(ctx, assignedIP); err != nil {
+				return o.fail(job.ID, err)
+			}
+			ip = assignedIP
+		} else {
+			// Legacy path: discover via qemu-guest-agent. Requires the agent
+			// to be installed in the worker image (or via a cicustom snippet).
+			discovered, err := o.Proxmox.WaitForIP(ctx, cfg.ProxmoxNode, vmid)
+			if err != nil {
+				return o.fail(job.ID, err)
+			}
+			if err := o.Proxmox.InjectSSHKey(ctx, cfg.ProxmoxNode, vmid, readFile(o.SSHKey+".pub")); err != nil {
+				return o.fail(job.ID, fmt.Errorf("inject ssh key vm %d: %w", vmid, err))
+			}
+			ip = discovered
 		}
 		_ = o.DB.UpdateWorkerIP(workerID, ip)
 		workerIPs = append(workerIPs, ip)

@@ -16,8 +16,11 @@ type settingsPayload struct {
 	StoragePool        string `json:"storage_pool"`
 	ImageStorage       string `json:"image_storage"`
 	ProxmoxNode        string `json:"proxmox_node"`
-	NetworkBridge string `json:"network_bridge"`
-	SSHKeyPath    string `json:"ssh_key_path"`
+	NetworkBridge  string `json:"network_bridge"`
+	WorkerIPPool   string `json:"worker_ip_pool"`
+	WorkerCIDR     string `json:"worker_cidr"`
+	WorkerGateway  string `json:"worker_gateway"`
+	SSHKeyPath     string `json:"ssh_key_path"`
 }
 
 func splitToken(t string) (id, secret string) {
@@ -28,7 +31,7 @@ func splitToken(t string) (id, secret string) {
 }
 
 func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
-	keys := []string{"proxmox_url", "proxmox_token", "storage_pool", "image_storage", "proxmox_node", "network_bridge", "ssh_key_path"}
+	keys := []string{"proxmox_url", "proxmox_token", "storage_pool", "image_storage", "proxmox_node", "network_bridge", "worker_ip_pool", "worker_cidr", "worker_gateway", "ssh_key_path"}
 	m := make(map[string]string)
 	for _, k := range keys {
 		v, _ := s.DB.GetSetting(k)
@@ -88,6 +91,9 @@ func (s *Server) postSettings(w http.ResponseWriter, r *http.Request) {
 		"storage_pool":    p.StoragePool,
 		"image_storage":   p.ImageStorage,
 		"network_bridge":  p.NetworkBridge,
+		"worker_ip_pool":  p.WorkerIPPool,
+		"worker_cidr":     p.WorkerCIDR,
+		"worker_gateway":  p.WorkerGateway,
 		"ssh_key_path":    p.SSHKeyPath,
 	}
 	if token != "" {
