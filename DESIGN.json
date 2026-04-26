@@ -1,0 +1,229 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-04-26T00:00:00Z",
+  "title": "Design System: Benchere",
+  "extensions": {
+    "colorMeta": {
+      "ember-orange": {
+        "role": "primary",
+        "displayName": "Ember Orange",
+        "canonical": "#f97316",
+        "tonalRamp": ["#fff7ed", "#ffedd5", "#fed7aa", "#fdba74", "#fb923c", "#f97316", "#ea580c", "#c2410c"]
+      },
+      "ember-deep": {
+        "role": "primary",
+        "displayName": "Ember Deep",
+        "canonical": "#c2410c",
+        "tonalRamp": ["#fdba74", "#fb923c", "#f97316", "#ea580c", "#c2410c", "#9a3412", "#7c2d12", "#431407"]
+      },
+      "ember-glow": {
+        "role": "primary",
+        "displayName": "Ember Glow",
+        "canonical": "#fff7ed",
+        "tonalRamp": ["#fff7ed", "#ffedd5", "#fed7aa", "#fdba74", "#fb923c", "#f97316", "#ea580c", "#c2410c"]
+      },
+      "graphite-50": {
+        "role": "neutral",
+        "displayName": "Graphite Mist",
+        "canonical": "#fafafa",
+        "tonalRamp": ["#fafafa", "#f5f5f5", "#e5e5e5", "#d4d4d4", "#a3a3a3", "#737373", "#525252", "#404040"]
+      },
+      "graphite-200": {
+        "role": "neutral",
+        "displayName": "Graphite Hairline",
+        "canonical": "#e5e5e5",
+        "tonalRamp": ["#fafafa", "#f5f5f5", "#e5e5e5", "#d4d4d4", "#a3a3a3", "#737373", "#525252", "#404040"]
+      },
+      "graphite-600": {
+        "role": "neutral",
+        "displayName": "Graphite Quill",
+        "canonical": "#525252",
+        "tonalRamp": ["#a3a3a3", "#737373", "#525252", "#404040", "#262626", "#171717", "#0a0a0a", "#000000"]
+      },
+      "graphite-900": {
+        "role": "neutral",
+        "displayName": "Graphite Ink",
+        "canonical": "#171717",
+        "tonalRamp": ["#737373", "#525252", "#404040", "#262626", "#171717", "#0a0a0a", "#000000", "#000000"]
+      },
+      "graphite-950": {
+        "role": "neutral",
+        "displayName": "Graphite Obsidian",
+        "canonical": "#0a0a0a",
+        "tonalRamp": ["#262626", "#171717", "#0a0a0a", "#000000", "#000000", "#000000", "#000000", "#000000"]
+      },
+      "surface-dark": {
+        "role": "neutral",
+        "displayName": "Surface Bench (Dark)",
+        "canonical": "#111113",
+        "tonalRamp": ["#fafafa", "#e5e5e5", "#a3a3a3", "#525252", "#262626", "#18181b", "#111113", "#0a0a0a"]
+      },
+      "signal-pass": {
+        "role": "tertiary",
+        "displayName": "Signal Pass (Verdant)",
+        "canonical": "#16a34a",
+        "tonalRamp": ["#f0fdf4", "#bbf7d0", "#86efac", "#4ade80", "#22c55e", "#16a34a", "#15803d", "#166534"]
+      },
+      "signal-fail": {
+        "role": "tertiary",
+        "displayName": "Signal Fail (Vermillion)",
+        "canonical": "#dc2626",
+        "tonalRamp": ["#fef2f2", "#fecaca", "#fca5a5", "#f87171", "#ef4444", "#dc2626", "#b91c1c", "#7f1d1d"]
+      },
+      "signal-active": {
+        "role": "tertiary",
+        "displayName": "Signal Active (Cobalt)",
+        "canonical": "#2563eb",
+        "tonalRamp": ["#eff6ff", "#bfdbfe", "#93c5fd", "#60a5fa", "#3b82f6", "#2563eb", "#1d4ed8", "#1e3a8a"]
+      },
+      "signal-warn": {
+        "role": "tertiary",
+        "displayName": "Signal Warn (Amber)",
+        "canonical": "#d97706",
+        "tonalRamp": ["#fffbeb", "#fde68a", "#fcd34d", "#fbbf24", "#f59e0b", "#d97706", "#b45309", "#78350f"]
+      },
+      "data-cool": {
+        "role": "secondary",
+        "displayName": "Data Cool (Glacier)",
+        "canonical": "#0ea5e9",
+        "tonalRamp": ["#f0f9ff", "#bae6fd", "#7dd3fc", "#38bdf8", "#0ea5e9", "#0284c7", "#0369a1", "#0c4a6e"]
+      },
+      "data-violet": {
+        "role": "secondary",
+        "displayName": "Data Violet (Iris)",
+        "canonical": "#7c3aed",
+        "tonalRamp": ["#f5f3ff", "#ddd6fe", "#c4b5fd", "#a78bfa", "#8b5cf6", "#7c3aed", "#6d28d9", "#4c1d95"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Titre de page (h1 du PageHeader). Une occurrence par vue." },
+      "headline": { "displayName": "Headline", "purpose": "Titre de section dans une carte (Identification, Workers, Mode)." },
+      "title": { "displayName": "Title", "purpose": "Boutons, items de navigation, lignes en gras dans les listes." },
+      "body": { "displayName": "Body", "purpose": "Texte courant, helpers, descriptions." },
+      "label": { "displayName": "Label (Eyebrow)", "purpose": "Eyebrows uppercase, titres de cartes, pills de statut. Rare." },
+      "mono": { "displayName": "Mono Tabular", "purpose": "Tous les chiffres mesurés, IDs, IP, commandes inline, noms de profils techniques." }
+    },
+    "shadows": [
+      { "name": "shadow-card", "value": "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06)", "purpose": "Sépare les cartes du canvas. Quasi imperceptible, intentionnel." },
+      { "name": "shadow-card-dark", "value": "0 1px 0 0 rgb(255 255 255 / 0.02), 0 1px 3px 0 rgb(0 0 0 / 0.4)", "purpose": "Variante mode sombre : highlight intérieur + ombre douce." },
+      { "name": "shadow-pop", "value": "0 10px 30px -12px rgb(0 0 0 / 0.18), 0 4px 10px -4px rgb(0 0 0 / 0.10)", "purpose": "Modales et overlays détachés du flux." },
+      { "name": "shadow-brand", "value": "0 6px 18px -6px rgb(249 115 22 / 0.55)", "purpose": "Halo Ember sur le CTA primaire au hover. Exclusif." }
+    ],
+    "motion": [
+      { "name": "duration-fast", "value": "150ms", "purpose": "Transitions de couleur sur boutons et liens." },
+      { "name": "duration-default", "value": "220ms", "purpose": "Apparition de modales, pages (fade-in)." },
+      { "name": "duration-slow", "value": "500ms", "purpose": "Remplissage de barre de progression." },
+      { "name": "ease-out-quart", "value": "cubic-bezier(0.25, 1, 0.5, 1)", "purpose": "Easing par défaut pour entrées d'éléments." },
+      { "name": "pulse-dot", "value": "1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite", "purpose": "Pulsation des dots de statut actif." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "2xl", "value": "1500px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "CTA principal. Une seule instance par vue. Halo Ember au hover.",
+      "html": "<button class=\"ds-btn-primary\"><svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"12\" y1=\"5\" x2=\"12\" y2=\"19\"/><line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"/></svg> Lancer un benchmark</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 14px; border: none; border-radius: 8px; background: #f97316; color: #ffffff; font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 14px; font-weight: 600; line-height: 1.4; letter-spacing: 0; cursor: pointer; box-shadow: 0 1px 2px rgb(249 115 22 / 0.3); transition: background-color 150ms cubic-bezier(0.25, 1, 0.5, 1), box-shadow 150ms cubic-bezier(0.25, 1, 0.5, 1); } .ds-btn-primary:hover { background: #ea580c; box-shadow: 0 6px 18px -6px rgb(249 115 22 / 0.55); } .ds-btn-primary:active { background: #9a3412; box-shadow: none; } .ds-btn-primary:focus-visible { outline: 2px solid #f97316; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Action neutre. Présente partout aux côtés du primaire ou seule.",
+      "html": "<button class=\"ds-btn-secondary\"><svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"23 4 23 10 17 10\"/><polyline points=\"1 20 1 14 7 14\"/><path d=\"M3.51 9a9 9 0 0 1 14.85-3.36L23 10\"/><path d=\"M20.49 15A9 9 0 0 1 5.64 18.36L1 14\"/></svg> Actualiser</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 14px; border: 1px solid #e5e5e5; border-radius: 8px; background: #ffffff; color: #171717; font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: border-color 150ms ease-out, background-color 150ms ease-out; } .ds-btn-secondary:hover { border-color: #d4d4d4; background: #f5f5f5; } .ds-btn-secondary:focus-visible { outline: 2px solid #f97316; outline-offset: 2px; }"
+    },
+    {
+      "name": "Status Pill (Pass)",
+      "kind": "chip",
+      "refersTo": "status-pill-pass",
+      "description": "Badge de statut sémantique. Dot + couleur + label : trois canaux pour un sens.",
+      "html": "<span class=\"ds-pill-pass\"><span class=\"ds-pill-pass-dot\"></span>Terminé</span>",
+      "css": ".ds-pill-pass { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 6px; background: #f0fdf4; color: #15803d; font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; box-shadow: inset 0 0 0 1px rgb(22 163 74 / 0.2); white-space: nowrap; } .ds-pill-pass-dot { width: 6px; height: 6px; border-radius: 9999px; background: #22c55e; flex-shrink: 0; }"
+    },
+    {
+      "name": "Status Pill (Running)",
+      "kind": "chip",
+      "refersTo": "status-pill-running",
+      "description": "Variante active : le dot pulse pour signifier que le job est vivant.",
+      "html": "<span class=\"ds-pill-running\"><span class=\"ds-pill-running-dot\"></span>En cours</span>",
+      "css": ".ds-pill-running { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 6px; background: #eff6ff; color: #1d4ed8; font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; box-shadow: inset 0 0 0 1px rgb(37 99 235 / 0.2); white-space: nowrap; } .ds-pill-running-dot { width: 6px; height: 6px; border-radius: 9999px; background: #3b82f6; flex-shrink: 0; animation: ds-pulse-dot 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite; } @keyframes ds-pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.85); } }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Surface de contenu. Bordure 1px, ombre quasi imperceptible, jamais imbriquée.",
+      "html": "<div class=\"ds-card\"><p class=\"ds-card-eyebrow\">Vue d'ensemble</p><h3 class=\"ds-card-value\">12,847<span class=\"ds-card-unit\">IOPS</span></h3><p class=\"ds-card-hint\">Pic mesuré sur le profil 4k_100read_100random</p></div>",
+      "css": ".ds-card { background: #ffffff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06); font-family: Geist, ui-sans-serif, system-ui, sans-serif; max-width: 280px; } .ds-card-eyebrow { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #737373; margin: 0 0 8px 0; } .ds-card-value { font-family: \"Geist Mono\", ui-monospace, SFMono-Regular, Menlo, monospace; font-feature-settings: \"tnum\"; font-size: 24px; font-weight: 600; color: #171717; margin: 0; letter-spacing: -0.01em; } .ds-card-unit { font-family: Geist, ui-sans-serif, system-ui, sans-serif; font-size: 14px; font-weight: 400; color: #737373; margin-left: 4px; } .ds-card-hint { font-size: 12px; color: #737373; margin: 4px 0 0 0; }"
+    },
+    {
+      "name": "Input with Label",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Champ de formulaire avec label uppercase au-dessus et helper en dessous.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-label\" for=\"ds-input-demo\">Storage pool benchmark</label><input id=\"ds-input-demo\" class=\"ds-input\" type=\"text\" placeholder=\"local-lvm\" /><p class=\"ds-helper\">LVM-thin, ZFS, Ceph. Hébergera les disques data des workers.</p></div>",
+      "css": ".ds-field { font-family: Geist, ui-sans-serif, system-ui, sans-serif; max-width: 380px; } .ds-label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #525252; margin-bottom: 6px; } .ds-input { display: block; width: 100%; height: 40px; padding: 0 12px; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 8px; color: #171717; font-family: inherit; font-size: 14px; line-height: 1.4; transition: border-color 150ms ease-out, box-shadow 150ms ease-out; } .ds-input::placeholder { color: #a3a3a3; } .ds-input:focus { outline: none; border-color: #f97316; box-shadow: 0 0 0 2px rgb(249 115 22 / 0.4); } .ds-helper { font-size: 12px; color: #737373; margin: 6px 0 0 0; }"
+    },
+    {
+      "name": "Nav Link (Active)",
+      "kind": "nav",
+      "refersTo": "nav-link-active",
+      "description": "Item de sidebar actif. Marqueur Ember dans le gutter à gauche, fond Ember Glow.",
+      "html": "<div class=\"ds-nav-wrap\"><a href=\"#\" class=\"ds-nav-active\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 10.5 12 3l9 7.5\"/><path d=\"M5 9.5V21h14V9.5\"/><path d=\"M10 21v-6h4v6\"/></svg>Accueil</a></div>",
+      "css": ".ds-nav-wrap { padding: 8px; background: #ffffff; border-radius: 12px; border: 1px solid #e5e5e5; max-width: 240px; font-family: Geist, ui-sans-serif, system-ui, sans-serif; } .ds-nav-active { position: relative; display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 12px; border-radius: 8px; background: #fff7ed; color: #171717; font-size: 14px; font-weight: 600; text-decoration: none; transition: background-color 150ms ease-out; } .ds-nav-active::before { content: \"\"; position: absolute; left: -8px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: #f97316; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Operations Bench",
+    "overview": "Benchere se présente comme un poste d'opération : un banc d'instruments alignés sous la main d'un ingénieur. Aucun spectacle, aucune mise en scène. La hiérarchie visuelle existe pour qu'on lise une valeur, qu'on prenne une décision, et qu'on passe au job suivant. L'interface s'efface derrière la donnée. L'orange n'apparaît que là où l'œil doit se poser : action principale, route active, marqueur dans la marge, accent du rapport. Partout ailleurs, des neutres tièdement tintés qui posent le décor sans le revendiquer.\n\nLe système rejette frontalement quatre familles esthétiques nommées dans PRODUCT.md : les gradients pastel des landings AI, le néon des dashboards crypto, le bleu corporate fade des intranets 2014, et la grammaire marketing SaaS. La référence positive est double : densité d'un Datadog, soin d'un Linear. Pas de compromis, les deux qualités cohabitent.",
+    "keyCharacteristics": [
+      "Density-first : tableaux compacts, alignement à droite des chiffres, peu de whitespace gratuit dans les rangées de données.",
+      "Bordures plutôt qu'ombres pour la séparation des surfaces de page (élévation hybride).",
+      "Une seule couleur de marque, utilisée comme signature, jamais comme décoration.",
+      "Vocabulaire neutre légèrement chaud (chroma minuscule vers l'orange) plutôt que zinc froid.",
+      "Toute animation a une raison fonctionnelle. Les pulses informent, rien ne bouge pour faire joli."
+    ],
+    "rules": [
+      { "name": "The One Voice Rule", "body": "L'Ember Orange ne couvre jamais plus de ~10% de la surface visible. Si tu peins plus, tu casses la signature. Si tout est orange, plus rien ne l'est.", "section": "colors" },
+      { "name": "The Tinted Neutral Rule", "body": "Aucun gris n'est purement neutre. La famille Graphite est légèrement poussée vers l'orange (chroma ~0.005), pour que blanc et noir soient cousins et non étrangers à la marque. Les valeurs #000 et #fff purs sont prohibées.", "section": "colors" },
+      { "name": "The Signal-Stays-Sematic Rule", "body": "Les couleurs Signal ne servent qu'à transporter du sens (statut, verdict, alerte). Elles ne décorent jamais une carte par joliesse, n'illustrent pas une icône hors contexte de statut, et ne se mélangent pas dans les charts.", "section": "colors" },
+      { "name": "The Number-In-Mono Rule", "body": "Tout chiffre qui sera comparé verticalement (colonnes de tableaux, KPI cards alignés en grille, métriques live) est rendu en Geist Mono avec tabular-nums. Le chiffre seul prouve qu'il est lu, pas l'environnement qui l'entoure.", "section": "typography" },
+      { "name": "The Single-Display Rule", "body": "Un seul Display par page (le titre du PageHeader). Ne pas multiplier les gros titres : si une section veut peser plus, elle prend Headline, jamais Display.", "section": "typography" },
+      { "name": "The Label-Earns-Caps Rule", "body": "L'UPPERCASE est réservé au token Label (eyebrows, card titles, pills). Aucun autre niveau ne porte de majuscules.", "section": "typography" },
+      { "name": "The Border-Before-Shadow Rule", "body": "La hiérarchie de surface se gagne d'abord par bordure et fond, ensuite seulement par ombre. Une carte qui ajoute une ombre marquée pour exister est probablement mal posée dans la grille.", "section": "elevation" },
+      { "name": "The Lifted-Means-Detached Rule", "body": "Une ombre marquée signifie que l'élément est physiquement détaché du flux (modale, dropdown). Si le contenu reste dans le flux normal de la page, il ne mérite pas une Shadow Pop.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do réserver l'Ember Orange à l'action primaire, à la route active de sidebar, au marqueur de progression, et aux ancres du rapport PDF. Le reste vit en Graphite.",
+      "Do rendre tous les chiffres en Geist Mono avec font-feature: \"tnum\" et alignement à droite dans les tableaux.",
+      "Do matérialiser le statut par dot + couleur + label. Trois canaux pour un sens, jamais un seul.",
+      "Do privilégier les bordures fines et le décalage de fond par rapport aux ombres lourdes.",
+      "Do soigner le rapport PDF autant que l'app vivante : c'est l'artefact qui finit dans les mains du client.",
+      "Do respecter prefers-reduced-motion : toutes les animations doivent se neutraliser.",
+      "Do afficher une seule action primaire par vue."
+    ],
+    "donts": [
+      "Don't utiliser de gradient pastel violet/rose, ni glassmorphism décoratif, ni hero cards centrées sur fond flou.",
+      "Don't virer cyber neon : pas de fond noir saturé avec accents néon vert/bleu.",
+      "Don't glisser dans le Bootstrap corporate : pas de bleu administratif fade, pas de tableaux serrés sans hiérarchie.",
+      "Don't importer la grammaire marketing SaaS : pas de hero metric décoratif, pas de testimonial blocks.",
+      "Don't utiliser de border-left/right > 1px comme accent coloré sur cartes, alertes ou items de liste.",
+      "Don't appliquer background-clip: text sur un gradient pour faire du texte coloré.",
+      "Don't imbriquer une carte dans une carte. Utilise surface-muted si une zone mérite son propre traitement.",
+      "Don't animer pour décorer. Une animation existe pour informer.",
+      "Don't utiliser #000 ou #fff purs.",
+      "Don't mettre plus d'une couleur de marque par vue, ni plus d'un Display par page.",
+      "Don't traduire un statut par la couleur seule. Le PDF doit rester lisible imprimé en N&B.",
+      "Don't céder au tiret cadratin (—) dans la copy d'interface ni dans les commentaires de code."
+    ]
+  }
+}

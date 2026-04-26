@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Rapport Benchere — {{.Job.Name}}</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 22mm 16mm; }
+
+  :root {
+    --brand:        #f97316;
+    --brand-deep:   #c2410c;
+    --brand-soft:   #fff7ed;
+    --ink:          #171717;
+    --ink-mid:      #525252;
+    --ink-mute:     #737373;
+    --ink-faint:    #a3a3a3;
+    --line:         #e5e5e5;
+    --line-soft:    #f5f5f5;
+    --bg:           #ffffff;
+    --bg-soft:      #fafafa;
+    --ok:           #15803d;
+    --bad:          #b91c1c;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    font-size: 11pt;
+    line-height: 1.5;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  h1, h2, h3 { font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+  h1 { font-size: 28pt; }
+  h2 {
+    font-size: 14pt; color: var(--ink); margin: 0 0 14px 0;
+    padding-bottom: 8px; border-bottom: 2px solid var(--brand);
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2 .num-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 6px;
+    background: var(--brand-soft); color: var(--brand-deep);
+    font-size: 11pt; font-weight: 700;
+  }
+  h3 { font-size: 11pt; color: var(--ink-mid); margin: 0 0 8px 0; }
+
+  .num { font-family: "SF Mono", "Menlo", "Consolas", monospace; font-feature-settings: "tnum"; }
+
+  /* COVER */
+  .cover {
+    page-break-after: always;
+    height: 252mm;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 4mm 0;
+  }
+  .cover-top {
+    display: flex; align-items: center; gap: 18px;
+    padding-bottom: 28px; border-bottom: 1px solid var(--line);
+  }
+  .wordmark {
+    display: inline-flex; align-items: baseline;
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    font-size: 26pt; line-height: 1; letter-spacing: -1.2px;
+    color: var(--ink);
+  }
+  .wordmark .bench { font-weight: 800; }
+  .wordmark .ere   { font-weight: 600; opacity: 0.55; }
+  .wordmark .bar {
+    display: inline-block; width: 4px; height: 24pt;
+    background: var(--brand);
+    transform: skew(-18deg);
+    margin: 0 7px; border-radius: 1px;
+  }
+  .cover-tagline {
+    margin-left: 4px; font-size: 8.5pt;
+    color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.14em;
+    font-weight: 600;
+  }
+
+  .cover-hero { margin-top: 60px; }
+  .cover-eyebrow {
+    color: var(--brand-deep); font-weight: 600; font-size: 10pt;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    margin-bottom: 18px;
+  }
+  .cover-title {
+    font-size: 36pt; font-weight: 700; line-height: 1.05;
+    color: var(--ink); margin-bottom: 12px; letter-spacing: -0.02em;
+  }
+  .cover-sub {
+    font-size: 14pt; color: var(--ink-mid); font-weight: 400;
+  }
+
+  .cover-meta {
+    margin-top: 50px;
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px;
+  }
+  .meta-card {
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 18px; background: var(--bg-soft);
+  }
+  .meta-label {
+    font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-mute); font-weight: 600; margin-bottom: 6px;
+  }
+  .meta-value {
+    font-size: 13pt; color: var(--ink); font-weight: 600;
+  }
+
+  .cover-bottom {
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+    display: flex; justify-content: space-between; align-items: center;
+    color: var(--ink-mute); font-size: 9pt;
+  }
+  .cover-stripe {
+    height: 4px; border-radius: 2px;
+    background: linear-gradient(90deg, var(--brand) 0%, var(--brand-deep) 60%, transparent 100%);
+    margin-bottom: 16px;
+  }
+
+  /* PAGE LAYOUT */
+  .section { margin-bottom: 24px; }
+  .section + .page-break { margin-top: 0; }
+  .page-break { page-break-after: always; }
+
+  .lead {
+    color: var(--ink-mid); font-size: 10pt; margin: -6px 0 14px 0;
+  }
+
+  /* TABLES */
+  table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    margin: 0 0 14px 0; font-size: 9.5pt;
+    border: 1px solid var(--line); border-radius: 10px;
+    overflow: hidden;
+  }
+  thead th {
+    background: var(--bg-soft);
+    color: var(--ink-mid); font-weight: 600;
+    font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.06em;
+    text-align: left; padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  thead th.right { text-align: right; }
+  thead th.center { text-align: center; }
+  tbody td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line-soft);
+    color: var(--ink);
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody td.right { text-align: right; }
+  tbody td.center { text-align: center; }
+  tbody td.mono { font-family: "SF Mono", "Menlo", "Consolas", monospace; }
+  tbody td.profile {
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: 9pt; font-weight: 600;
+    color: var(--brand-deep);
+  }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 8px; border-radius: 6px;
+    font-size: 8.5pt; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    border: 1px solid;
+  }
+  .pill-pass {
+    background: #f0fdf4; color: var(--ok); border-color: #86efac;
+  }
+  .pill-fail {
+    background: #fef2f2; color: var(--bad); border-color: #fca5a5;
+  }
+  .pill-na {
+    background: var(--bg-soft); color: var(--ink-mute); border-color: var(--line);
+  }
+
+  /* CHARTS */
+  .chart-card {
+    border: 1px solid var(--line); border-radius: 12px;
+    background: var(--bg); padding: 14px 16px 8px 16px;
+    margin-bottom: 14px;
+    page-break-inside: avoid;
+  }
+  .chart-card-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px;
+  }
+  .chart-card-title {
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: 9.5pt; font-weight: 600; color: var(--brand-deep);
+  }
+  .chart-card-meta {
+    font-size: 8pt; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-mute); font-weight: 600;
+  }
+  .chart-card svg { display: block; width: 100%; height: auto; }
+
+  /* FOOTER (printed on every page via @page in wkhtmltopdf if supported) */
+  .doc-footer {
+    border-top: 1px solid var(--line);
+    margin-top: 18px; padding-top: 10px;
+    display: flex; justify-content: space-between;
+    color: var(--ink-mute); font-size: 8.5pt;
+  }
+  .footer-mark {
+    color: var(--brand-deep); font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<section class="cover">
+  <div class="cover-top">
+    <span class="wordmark">
+      <span class="bench">bench</span><span class="bar"></span><span class="ere">ere</span>
+    </span>
+    <span class="cover-tagline">Infrastructure benchmark report</span>
+    <div style="margin-left:auto; text-align:right; color:var(--ink-mute); font-size:9pt;">
+      <div>Émis le {{.Job.CreatedAt.Format "02 / 01 / 2006"}}</div>
+      <div class="num">{{.Job.CreatedAt.Format "15:04"}}</div>
+    </div>
+  </div>
+
+  <div class="cover-hero">
+    <div class="cover-stripe"></div>
+    <div class="cover-eyebrow">Rapport de benchmark</div>
+    <h1 class="cover-title">{{.Job.Name}}</h1>
+    <div class="cover-sub">Préparé pour <strong>{{.Job.ClientName}}</strong></div>
+  </div>
+
+  <div class="cover-meta">
+    <div class="meta-card">
+      <div class="meta-label">Client</div>
+      <div class="meta-value">{{.Job.ClientName}}</div>
+    </div>
+    <div class="meta-card">
+      <div class="meta-label">Mode</div>
+      <div class="meta-value">{{.Job.Mode}}</div>
+    </div>
+    <div class="meta-card">
+      <div class="meta-label">Date d'exécution</div>
+      <div class="meta-value">{{.Job.CreatedAt.Format "02/01/2006 — 15:04"}}</div>
+    </div>
+    <div class="meta-card">
+      <div class="meta-label">Identifiant du job</div>
+      <div class="meta-value num" style="font-size:11pt;">{{.Job.ID}}</div>
+    </div>
+  </div>
+
+  <div class="cover-bottom">
+    <div>Rapport généré automatiquement par Benchere</div>
+    <div class="footer-mark">Benchere · Infrastructure benchmark</div>
+  </div>
+</section>
+
+<!-- EXECUTIVE SUMMARY -->
+<section class="section">
+  <h2><span class="num-badge">1</span>Résumé exécutif</h2>
+  <p class="lead">
+    Synthèse des performances mesurées par profil. Les seuils de validation
+    (lorsque définis) déterminent le verdict pass / fail.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Profil</th>
+        <th class="right">IOPS Read max</th>
+        <th class="right">IOPS Write max</th>
+        <th class="right">Débit Read (MB/s)</th>
+        <th class="right">Latence avg (ms)</th>
+        <th class="right">Latence p99 (ms)</th>
+        <th class="center">Verdict</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Summary}}
+      <tr>
+        <td class="profile">{{.ProfileName}}</td>
+        <td class="right mono">{{printf "%.0f" .MaxIOPSRead}}</td>
+        <td class="right mono">{{printf "%.0f" .MaxIOPSWrite}}</td>
+        <td class="right mono">{{printf "%.1f" .MaxThroughputRead}}</td>
+        <td class="right mono">{{printf "%.2f" .AvgLatencyMs}}</td>
+        <td class="right mono">{{printf "%.2f" .P99LatencyMs}}</td>
+        <td class="center">
+          {{if eq .Verdict "pass"}}
+            <span class="pill pill-pass">Pass</span>
+          {{else if eq .Verdict "fail"}}
+            <span class="pill pill-fail">Fail</span>
+          {{else}}
+            <span class="pill pill-na">N/A</span>
+          {{end}}
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+
+<div class="page-break"></div>
+
+<!-- IOPS CHARTS -->
+<section class="section">
+  <h2><span class="num-badge">2</span>Résultats stockage — IOPS dans le temps</h2>
+  <p class="lead">Évolution des IOPS Read mesurées par echantillon, par profil testé.</p>
+
+  {{range .IOPSCharts}}
+  <div class="chart-card">
+    <div class="chart-card-header">
+      <div class="chart-card-title">{{.Profile}}</div>
+      <div class="chart-card-meta">IOPS Read</div>
+    </div>
+    {{.SVG}}
+  </div>
+  {{end}}
+</section>
+
+<div class="page-break"></div>
+
+<!-- CLUSTER -->
+<section class="section">
+  <h2><span class="num-badge">3</span>Charge cluster Proxmox</h2>
+  <p class="lead">Utilisation CPU des nodes Proxmox pendant la durée du benchmark.</p>
+
+  <div class="chart-card">
+    <div class="chart-card-header">
+      <div class="chart-card-title">CPU cluster (%)</div>
+      <div class="chart-card-meta">Pendant le run</div>
+    </div>
+    {{.NodeChartSVG}}
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Node</th>
+        <th class="right">CPU max (%)</th>
+        <th class="right">CPU avg (%)</th>
+        <th class="right">RAM avg (%)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .NodeSummary}}
+      <tr>
+        <td class="profile">{{.NodeName}}</td>
+        <td class="right mono">{{printf "%.1f" .MaxCPU}}</td>
+        <td class="right mono">{{printf "%.1f" .AvgCPU}}</td>
+        <td class="right mono">{{printf "%.1f" .AvgRAM}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+
+  <div class="doc-footer">
+    <div>Rapport Benchere — {{.Job.Name}}</div>
+    <div class="footer-mark">Confidentiel · {{.Job.ClientName}}</div>
+  </div>
+</section>
+
+</body>
+</html>

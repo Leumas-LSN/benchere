@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fr" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f97316" />
+    <title>Benchere</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" />
+    <script>
+      // Apply theme before paint to avoid flash
+      (function () {
+        try {
+          var stored = localStorage.getItem('benchere-theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var theme = stored || (prefersDark ? 'dark' : 'light');
+          if (theme === 'dark') document.documentElement.classList.add('dark');
+        } catch (_) {}
+      })();
+    </script>
+  </head>
+  <body class="h-full bg-ink-50 dark:bg-ink-950 text-ink-900 dark:text-ink-50 antialiased">
+    <div id="app" class="h-full"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,46 @@
+# Build artefacts
+/benchere
+/benchere-new
+*.exe
+
+# Test output
+*.out
+coverage.txt
+
+# DB files (runtime data)
+*.db
+*.db.bak
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Vendor / deps
+vendor/
+web/node_modules/
+
+# Frontend build (embedded into the binary by go:embed at build time)
+web/dist/
+
+# Packer secrets and outputs
+packer/variables.pkrvars.hcl
+packer/output-*/
+
+# Embedded payloads (downloaded at packer build time)
+assets/elbencho/elbencho_amd64.deb
+assets/elbencho_amd64.deb
+
+# Local SSH keys for workers
+id_rsa
+id_rsa.pub
+
+# Runtime output
+output/
+
+# Backups (huge tarballs, kept locally)
+backups/
+
+# User-uploaded profiles (runtime state)
+profiles/
+/CLAUDE.md

@@ -1,0 +1,55 @@
+---
+- name: Provision elbencho worker
+  hosts: workers
+  become: true
+  vars:
+    elbencho_deb: /tmp/elbencho_amd64.deb
+
+  tasks:
+    - name: Copy elbencho deb
+      copy:
+        src: "{{ elbencho_deb_local }}"
+        dest: "{{ elbencho_deb }}"
+        mode: '0644'
+
+    - name: Install elbencho
+      apt:
+        deb: "{{ elbencho_deb }}"
+        state: present
+
+    - name: Install stress-ng and qemu-guest-agent
+      apt:
+        name:
+          - stress-ng
+          - qemu-guest-agent
+        state: present
+        update_cache: true
+
+    - name: Start and enable qemu-guest-agent
+      systemd:
+        name: qemu-guest-agent
+        state: started
+        enabled: true
+
+    - name: Create elbencho systemd service
+      copy:
+        dest: /etc/systemd/system/elbencho.service
+        content: |
+          [Unit]
+          Description=Elbencho Benchmark Agent
+          After=network.target
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/elbencho --service --foreground
+          Restart=always
+          RestartSec=5
+          User=root
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Start and enable elbencho service
+      systemd:
+        name: elbencho
+        state: started
+        enabled: true
+        daemon_reload: true
