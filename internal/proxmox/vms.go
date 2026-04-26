@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -66,6 +67,7 @@ func (c *Client) CreateVM(ctx context.Context, p VMCreateParams) (int, error) {
 	form.Set("ipconfig0", "ip=dhcp")
 	form.Set("ciuser", "root")
 	encodedKey := strings.ReplaceAll(url.QueryEscape(strings.TrimSpace(p.SSHKey)), "+", "%20")
+	log.Printf("[create vm %d] ssh pubkey: raw=%d bytes encoded=%d bytes", p.VMID, len(p.SSHKey), len(encodedKey))
 	form.Set("sshkeys", encodedKey)
 	if p.ImagePath != "" {
 		form.Set("scsi0", fmt.Sprintf("%s:0,import-from=%s,size=%dG", p.StoragePool, p.ImagePath, p.OSDiskGB))
