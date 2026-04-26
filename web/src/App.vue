@@ -105,7 +105,7 @@
           class="btn-primary btn-sm hidden sm:inline-flex"
         >
           <Icon name="plus" :size="14" />
-          Nouveau benchmark
+          {{ t("breadcrumb.newJob") }}
         </RouterLink>
 
         <ThemeToggle />

@@ -262,6 +262,8 @@ import PageHeader from '../components/PageHeader.vue'
 import Icon       from '../components/Icon.vue'
 import Spinner    from '../components/Spinner.vue'
 
+const { t } = useI18n()
+
 const router        = useRouter()
 const jobsStore     = useJobsStore()
 const settingsStore = useSettingsStore()

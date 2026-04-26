@@ -221,6 +221,8 @@ import NodeCard     from '../components/NodeCard.vue'
 import Icon         from '../components/Icon.vue'
 import Spinner      from '../components/Spinner.vue'
 
+const { t } = useI18n()
+
 const REFRESH_MS = 5000
 
 const settingsStore = useSettingsStore()

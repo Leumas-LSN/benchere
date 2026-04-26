@@ -195,6 +195,8 @@ import EmptyState from '../components/EmptyState.vue'
 import Icon       from '../components/Icon.vue'
 import Spinner    from '../components/Spinner.vue'
 
+const { t } = useI18n()
+
 const profiles    = ref([])
 const error       = ref('')
 const showImport  = ref(false)

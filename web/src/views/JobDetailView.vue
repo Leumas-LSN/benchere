@@ -157,6 +157,8 @@ import StatCard    from '../components/StatCard.vue'
 import EmptyState  from '../components/EmptyState.vue'
 import Icon        from '../components/Icon.vue'
 
+const { t } = useI18n()
+
 const route   = useRoute()
 const jobId   = route.params.id
 const job     = ref(null)

@@ -148,6 +148,8 @@ import EmptyState  from '../components/EmptyState.vue'
 import Icon        from '../components/Icon.vue'
 import Spinner     from '../components/Spinner.vue'
 
+const { t } = useI18n()
+
 const jobsStore = useJobsStore()
 const error    = ref('')
 const clearing = ref(false)
