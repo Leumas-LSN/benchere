@@ -36,8 +36,13 @@ type ProxmoxNodePayload struct {
 }
 
 type ProxmoxVMPayload struct {
-	WorkerID string  `json:"worker_id"`
-	CPUPct   float64 `json:"cpu_pct"`
+	WorkerID     string  `json:"worker_id"`
+	CPUPct       float64 `json:"cpu_pct"`
+	RAMPct       float64 `json:"ram_pct"`
+	NetInBps     float64 `json:"net_in_bps"`
+	NetOutBps    float64 `json:"net_out_bps"`
+	DiskReadBps  float64 `json:"disk_read_bps"`
+	DiskWriteBps float64 `json:"disk_write_bps"`
 }
 
 type JobStatusPayload struct {

@@ -31,10 +31,15 @@ type VMCreateParams struct {
 }
 
 type VMStatus struct {
-	VMID   int
-	Status string
-	CPUPct float64
-	IP     string
+	VMID      int
+	Status    string
+	CPUPct    float64
+	RAMPct    float64
+	NetIn     float64 // cumulative bytes since boot
+	NetOut    float64
+	DiskRead  float64
+	DiskWrite float64
+	IP        string
 }
 
 // readUPID drains the response body and returns the task UPID from the
@@ -146,13 +151,32 @@ func (c *Client) DeleteVM(ctx context.Context, node string, vmid int) error {
 
 func (c *Client) GetVMStatus(ctx context.Context, node string, vmid int) (VMStatus, error) {
 	var raw struct {
-		Status string  `json:"status"`
-		CPU    float64 `json:"cpu"`
+		Status    string  `json:"status"`
+		CPU       float64 `json:"cpu"`
+		Mem       float64 `json:"mem"`
+		MaxMem    float64 `json:"maxmem"`
+		NetIn     float64 `json:"netin"`
+		NetOut    float64 `json:"netout"`
+		DiskRead  float64 `json:"diskread"`
+		DiskWrite float64 `json:"diskwrite"`
 	}
 	if err := c.getJSON(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/status/current", node, vmid), &raw); err != nil {
 		return VMStatus{}, err
 	}
-	return VMStatus{VMID: vmid, Status: raw.Status, CPUPct: raw.CPU * 100}, nil
+	ramPct := 0.0
+	if raw.MaxMem > 0 {
+		ramPct = raw.Mem / raw.MaxMem * 100
+	}
+	return VMStatus{
+		VMID:      vmid,
+		Status:    raw.Status,
+		CPUPct:    raw.CPU * 100,
+		RAMPct:    ramPct,
+		NetIn:     raw.NetIn,
+		NetOut:    raw.NetOut,
+		DiskRead:  raw.DiskRead,
+		DiskWrite: raw.DiskWrite,
+	}, nil
 }
 
 // WaitForIP polls the QEMU guest agent until an IPv4 address is reported.

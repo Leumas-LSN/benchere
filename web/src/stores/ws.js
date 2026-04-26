@@ -67,7 +67,7 @@ export const useWsStore = defineStore('ws', () => {
         nodeMetrics[p.node_name] = { cpuPct: p.cpu_pct, ramPct: p.ram_pct, loadAvg: p.load_avg }
         break
       case 'proxmox_vm':
-        workerMetrics[p.worker_id] = { cpuPct: p.cpu_pct }
+        workerMetrics[p.worker_id] = { cpuPct: p.cpu_pct, ramPct: p.ram_pct, netInBps: p.net_in_bps, netOutBps: p.net_out_bps, diskReadBps: p.disk_read_bps, diskWriteBps: p.disk_write_bps }
         break
       case 'job_status':
         jobStatus.status = p.status

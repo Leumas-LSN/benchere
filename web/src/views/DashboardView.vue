@@ -205,6 +205,11 @@
           </div>
           <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-2">
             <WorkerBadge
+              :ram="wsStore.workerMetrics[w.id]?.ramPct"
+              :net-in="wsStore.workerMetrics[w.id]?.netInBps"
+              :net-out="wsStore.workerMetrics[w.id]?.netOutBps"
+              :disk-read="wsStore.workerMetrics[w.id]?.diskReadBps"
+              :disk-write="wsStore.workerMetrics[w.id]?.diskWriteBps"
               v-for="(w, i) in workers"
               :key="w.id"
               :name="`Worker ${i + 1}`"
