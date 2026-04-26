@@ -72,7 +72,6 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 	proxmoxToken, _ := s.DB.GetSetting("proxmox_token")
 	storagePool, _ := s.DB.GetSetting("storage_pool")
 	proxmoxNode, _ := s.DB.GetSetting("proxmox_node")
-	sshKeyPath, _ := s.DB.GetSetting("ssh_key_path")
 	imageStorage, _ := s.DB.GetSetting("image_storage")
 
 	if req.WorkerCount == 0 {
@@ -125,7 +124,7 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		Ansible:     s.Orchestrator.Ansible,
 		Stress:      s.Orchestrator.Stress,
 		Hub:         s.Hub,
-		SSHKey:      sshKeyPath,
+		SSHKey:      s.Orchestrator.SSHKey,
 		ProfilesDir: s.Orchestrator.ProfilesDir,
 		OutputDir:   s.Orchestrator.OutputDir,
 	}
