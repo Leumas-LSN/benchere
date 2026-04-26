@@ -1,70 +1,151 @@
 # Benchere
 
-Outil de benchmark d'infrastructure pour ingénieurs en virtualisation. Mesure objectivement les performances stockage (via [elbencho](https://github.com/breuner/elbencho)) et CPU (via [stress-ng](https://github.com/ColinIanKing/stress-ng)) d'une infrastructure Proxmox, et produit un rapport PDF présentable à un client.
+> Storage and CPU benchmark tool for virtualization engineers — Proxmox-first, multi-hypervisor next.
 
-Un job, des profils, un rapport, un verdict pass/fail face à des seuils.
+[Français](#français) · [English](#english)
 
-## Comment ça marche
+---
 
-1. Tu connectes Benchere à un cluster Proxmox (URL + token API).
-2. Tu lances un job : choix du nœud, du storage pool, du nombre de workers, et des profils elbencho à exécuter.
-3. Benchere provisionne à la demande des VMs Debian 12 éphémères (cloud-init), les configure via Ansible, lance les benchmarks en distribué, puis détruit les workers à la fin.
-4. Tu télécharges le rapport PDF, et tu le poses sur la table.
+## English
 
-## Architecture
+Benchere measures the storage (via [elbencho](https://github.com/breuner/elbencho)) and CPU (via [stress-ng](https://github.com/ColinIanKing/stress-ng)) performance of a Proxmox cluster on demand, then turns the run into a PDF that you can hand to a client at a delivery meeting.
 
-Monolithe Go : un seul binaire sert l'API REST, le WebSocket temps réel et le frontend Vue3 compilé statiquement. SQLite pour la persistance. Ansible pour le provisioning des workers.
+One job, a set of elbencho profiles, a report, a pass/fail verdict against thresholds.
+
+### How it works
+
+1. Connect Benchere to a Proxmox cluster (API URL + token).
+2. Start a job: pick the node, storage pools, worker shape (vCPU/RAM/disks), and elbencho profiles.
+3. Benchere provisions ephemeral Debian VMs via cloud-init, configures them with Ansible, runs the distributed benchmark, then tears the workers down.
+4. Download the PDF report.
+
+### Install
+
+On any fresh Debian 12+ or Ubuntu 22.04+ VM (or LXC container) with internet access, run:
+
+```bash
+curl -fsSL https://github.com/Leumas-LSN/benchere/releases/latest/download/install.sh | sudo bash
+```
+
+Then open `http://<vm-ip>/` and follow the onboarding wizard. The wizard walks you through:
+
+1. Language (FR/EN).
+2. Hypervisor selection (Proxmox supported today; vSphere, Hyper-V, Azure Local listed for V2).
+3. Cluster connection (API URL, token id/secret, deployment node, cluster identifier).
+4. Worker network (bridge, static IP pool, CIDR, gateway).
+5. SSH key path used by Ansible to reach the workers.
+
+### Architecture
+
+Single Go binary that serves the REST API, the WebSocket live feed and the embedded Vue3 frontend. SQLite for persistence. Ansible for worker provisioning.
 
 ```
 cmd/benchere/        entry point
 internal/
-  api/               handlers REST + WebSocket
-  proxmox/           client API Proxmox VE
-  ansible/           runner Ansible
-  elbencho/          orchestration + parsing live CSV
-  stress/            stress-ng via SSH
-  benchmark/         state machine + orchestrator des jobs
-  report/            génération PDF/HTML + SVG charts
+  api/               REST + WebSocket handlers
+  proxmox/           Proxmox VE API client
+  ansible/           Ansible runner
+  elbencho/          orchestration + live CSV parser
+  stress/            stress-ng over SSH
+  benchmark/         state machine + job orchestrator + IP allocator
+  report/            HTML/PDF rendering + SVG charts
   ws/                WebSocket hub
   db/                SQLite migrations + queries
-web/                 Vue3 + Tailwind (source)
-ansible/             playbooks provisioning workers
-packer/              build OVA Master
+web/                 Vue3 + Tailwind source
 ```
 
-## Stack
+### Stack
 
-- **Backend** : Go, SQLite (`modernc.org/sqlite`), Gorilla WebSocket
-- **Frontend** : Vue3 (Composition API), Pinia, Vue Router, Tailwind CSS, Vite
-- **Provisioning** : Ansible, API Proxmox VE
-- **Benchmark stockage** : elbencho en mode distribué (`--hosts`)
-- **Benchmark CPU** : stress-ng sur workers via SSH
-- **Build OVA** : Packer + Debian 12 cloud image
+- **Backend:** Go, SQLite (`modernc.org/sqlite`), Gorilla WebSocket
+- **Frontend:** Vue3 (Composition API), Pinia, Vue Router, Tailwind CSS, Vite, vue-i18n
+- **Provisioning:** Ansible, Proxmox VE API
+- **Storage benchmark:** elbencho in distributed mode (`--hosts`)
+- **CPU benchmark:** stress-ng over SSH
+- **PDF rendering:** wkhtmltopdf
 
-## Build
+### Build from source
 
 ```bash
-make build       # frontend (npm run build) puis go build → ./benchere
-make package     # OVA via Packer
+make build       # builds web/dist + the Go binary
+make test
 make clean
 ```
 
-Le binaire embed `web/dist/` via `//go:embed`. Tout changement frontend requiert un rebuild Go.
+The binary embeds the frontend via `//go:embed`, so any change in `web/` requires a Go rebuild.
 
-## Variables d'environnement
+### Status
 
-| Variable          | Défaut             | Rôle                          |
-|-------------------|--------------------|-------------------------------|
-| `BENCHERE_PORT`   | `80`               | Port d'écoute HTTP            |
-| `BENCHERE_DB`     | `/data/benchere.db`| Chemin SQLite                 |
-| `BENCHERE_DEBUG`  | `false`            | Logs verbeux                  |
+V1 — internal-network deployment only (no auth), Proxmox-only. V2 will introduce a `Hypervisor` interface for vSphere / Hyper-V / Azure Local.
 
-## Concepts
+---
 
-- **Job** : unité de benchmark. Modes `storage` / `cpu` / `mixed`. États `pending → provisioning → running → done | failed | cancelled`.
-- **Worker** : VM Debian 12 éphémère créée dans Proxmox via cloud-init, provisionnée par Ansible, détruite à la fin du job.
-- **Profil elbencho** : nom + config (block size, ratio R/W, pattern) + thresholds (`min_iops_read`, `min_iops_write`, `max_latency_ms`) qui produisent le verdict pass/fail.
+## Français
 
-## Statut
+Benchere mesure les performances stockage (via [elbencho](https://github.com/breuner/elbencho)) et CPU (via [stress-ng](https://github.com/ColinIanKing/stress-ng)) d'un cluster Proxmox à la demande, puis transforme le run en PDF présentable à un client en réunion de recette.
 
-V1 — déploiement réseau interne uniquement, pas d'authentification, hyperviseur Proxmox uniquement. Multi-hyperviseur prévu en V2 (interface `Hypervisor` dans `internal/proxmox`).
+Un job, une liste de profils elbencho, un rapport, un verdict pass/fail face à des seuils.
+
+### Comment ça marche
+
+1. Tu connectes Benchere à un cluster Proxmox (URL API + token).
+2. Tu lances un job : choix du node, des storage pools, dimensionnement des workers (vCPU/RAM/disques) et des profils elbencho.
+3. Benchere provisionne des VMs Debian éphémères via cloud-init, les configure via Ansible, lance le benchmark en distribué, puis détruit les workers.
+4. Tu télécharges le rapport PDF.
+
+### Installation
+
+Sur n'importe quelle VM Debian 12+ ou Ubuntu 22.04+ fraîche (ou un container LXC) avec accès internet :
+
+```bash
+curl -fsSL https://github.com/Leumas-LSN/benchere/releases/latest/download/install.sh | sudo bash
+```
+
+Ouvre ensuite `http://<ip-vm>/` et suis l'assistant d'onboarding. Il te demandera :
+
+1. La langue (FR/EN).
+2. Le choix de l'hyperviseur (Proxmox aujourd'hui ; vSphere, Hyper-V, Azure Local en V2).
+3. Les paramètres de connexion au cluster (URL API, token id/secret, node, identifiant de cluster).
+4. Le réseau workers (bridge, plage d'IPs statiques, CIDR, passerelle).
+5. Le chemin de la clé SSH utilisée par Ansible.
+
+### Architecture
+
+Binaire Go unique qui sert l'API REST, le flux WebSocket temps réel et le frontend Vue3 embedé. SQLite pour la persistance. Ansible pour la configuration des workers.
+
+```
+cmd/benchere/        point d'entrée
+internal/
+  api/               handlers REST + WebSocket
+  proxmox/           client API Proxmox VE
+  ansible/           runner Ansible
+  elbencho/          orchestration + parsing CSV live
+  stress/            stress-ng via SSH
+  benchmark/         state machine + orchestrateur de jobs + allocateur d'IPs
+  report/            rendu HTML/PDF + charts SVG
+  ws/                hub WebSocket
+  db/                migrations + queries SQLite
+web/                 source Vue3 + Tailwind
+```
+
+### Stack
+
+- **Backend :** Go, SQLite (`modernc.org/sqlite`), Gorilla WebSocket
+- **Frontend :** Vue3 (Composition API), Pinia, Vue Router, Tailwind CSS, Vite, vue-i18n
+- **Provisioning :** Ansible, API Proxmox VE
+- **Benchmark stockage :** elbencho en mode distribué (`--hosts`)
+- **Benchmark CPU :** stress-ng via SSH
+- **Rendu PDF :** wkhtmltopdf
+
+### Build depuis les sources
+
+```bash
+make build       # build web/dist + binaire Go
+make test
+make clean
+```
+
+Le binaire embed le frontend via `//go:embed` : tout changement dans `web/` nécessite un rebuild Go.
+
+### Statut
+
+V1 — déploiement réseau interne uniquement (pas d'authentification), Proxmox seulement. V2 introduira une interface `Hypervisor` pour vSphere / Hyper-V / Azure Local.

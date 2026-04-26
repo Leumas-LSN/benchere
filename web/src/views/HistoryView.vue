@@ -110,7 +110,7 @@
                   </RouterLink>
                   <a
                     v-if="isFinished(job)"
-                    :href="api.reportHtmlUrl(job.id)"
+                    :href="api.reportHtmlUrl(job.id, locale)"
                     target="_blank"
                     class="btn-ghost btn-sm"
                     title="Rapport HTML"
@@ -119,7 +119,7 @@
                   </a>
                   <a
                     v-if="isFinished(job)"
-                    :href="api.reportPdfUrl(job.id)"
+                    :href="api.reportPdfUrl(job.id, locale)"
                     download
                     class="btn-ghost btn-sm"
                     title="Rapport PDF"

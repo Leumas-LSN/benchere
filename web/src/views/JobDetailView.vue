@@ -25,10 +25,10 @@
           <a :href="api.exportCsvUrl(jobId)" download class="btn-secondary btn-sm">
             <Icon name="table" :size="14" /> CSV
           </a>
-          <a :href="api.reportHtmlUrl(jobId)" target="_blank" class="btn-secondary btn-sm">
+          <a :href="api.reportHtmlUrl(jobId, locale)" target="_blank" class="btn-secondary btn-sm">
             <Icon name="external" :size="14" /> HTML
           </a>
-          <a :href="api.reportPdfUrl(jobId)" download class="btn-primary btn-sm">
+          <a :href="api.reportPdfUrl(jobId, locale)" download class="btn-primary btn-sm">
             <Icon name="download" :size="14" /> PDF
           </a>
         </template>
@@ -147,6 +147,7 @@
 </template>
 
 <script setup>
+import { useI18n } from "vue-i18n"
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { api } from '../api/client.js'

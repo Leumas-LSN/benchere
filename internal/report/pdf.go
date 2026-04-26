@@ -7,8 +7,8 @@ import (
 	"github.com/Leumas-LSN/benchere/internal/db"
 )
 
-func (g *Generator) RenderPDF(job db.Job, results []db.Result, snaps []db.ProxmoxSnapshot) ([]byte, error) {
-	html, err := g.RenderHTML(job, results, snaps)
+func (g *Generator) RenderPDF(job db.Job, results []db.Result, snaps []db.ProxmoxSnapshot, lang string) ([]byte, error) {
+	html, err := g.RenderHTML(job, results, snaps, lang)
 	if err != nil {
 		return nil, err
 	}

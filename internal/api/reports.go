@@ -22,7 +22,8 @@ func (s *Server) reportHTML(w http.ResponseWriter, r *http.Request) {
 	results, _ := s.DB.ListResultsByJob(id)
 	snapshots, _ := s.DB.ListProxmoxSnapshotsByJob(id)
 
-	html, err := s.Reporter.RenderHTML(job, results, snapshots)
+	lang := r.URL.Query().Get("lang")
+	html, err := s.Reporter.RenderHTML(job, results, snapshots, lang)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -45,7 +46,8 @@ func (s *Server) reportPDF(w http.ResponseWriter, r *http.Request) {
 	results, _ := s.DB.ListResultsByJob(id)
 	snapshots, _ := s.DB.ListProxmoxSnapshotsByJob(id)
 
-	pdf, err := s.Reporter.RenderPDF(job, results, snapshots)
+	lang := r.URL.Query().Get("lang")
+	pdf, err := s.Reporter.RenderPDF(job, results, snapshots, lang)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

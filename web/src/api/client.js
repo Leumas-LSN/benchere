@@ -39,8 +39,8 @@ export const api = {
   updateProfile:  (id, body) => request('PUT',    `/profiles/${id}`, body),
 
   // Report download URLs (no fetch — used as href)
-  reportPdfUrl:  (id) => `/api/jobs/${id}/report.pdf`,
-  reportHtmlUrl: (id) => `/api/jobs/${id}/report.html`,
+  reportPdfUrl:  (id, lang) => `/api/jobs/${id}/report.pdf?lang=${lang || 'fr'}`,
+  reportHtmlUrl: (id, lang) => `/api/jobs/${id}/report.html?lang=${lang || 'fr'}`,
 
   // Overview + results
   getOverview:    ()   => request('GET', '/overview'),
