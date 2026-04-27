@@ -21,13 +21,13 @@ type JobConfig struct {
 	Name          string
 	ClientName    string
 	Mode          Mode
-	WorkerCount   int
+	WorkersPerNode int
 	WorkerCPU     int
 	WorkerRAMMB   int
 	OSDiskGB      int
 	DataDisks     int
 	DataDiskGB    int
-	ProxmoxNode   string
+	ProxmoxNodes   []string
 	StoragePool   string
 	ImageStorage  string
 	CloudImageURL string

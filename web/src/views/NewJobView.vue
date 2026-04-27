@@ -40,11 +40,63 @@
         </div>
       </section>
 
+      <!-- Proxmox nodes -->
+      <section class="card space-y-4">
+        <header class="flex items-center justify-between">
+          <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.nodes') }}</h2>
+          <span class="card-title">Étape 2 / 5</span>
+        </header>
+        <div class="flex items-center justify-between">
+          <p class="helper">{{ t('newJob.nodes.hint') }}</p>
+          <button
+            v-if="availableNodes.length > 0"
+            type="button"
+            class="text-xs text-brand-600 dark:text-brand-400 hover:underline"
+            @click="toggleAllNodes"
+          >
+            {{ allNodesSelected ? t('newJob.nodes.deselectAll') : t('newJob.nodes.allNodes') }}
+          </button>
+        </div>
+        <div v-if="nodesLoading" class="text-sm fg-muted">{{ t('newJob.nodes.loading') }}</div>
+        <div v-else-if="!availableNodes.length" class="text-sm fg-muted">{{ t('newJob.nodes.empty') }}</div>
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <label
+            v-for="n in availableNodes"
+            :key="n.name"
+            :class="[
+              'flex items-center gap-3 cursor-pointer rounded-lg border p-3 transition-colors',
+              selectedNodes.includes(n.name)
+                ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/10'
+                : 'border-default hover:border-strong'
+            ]"
+          >
+            <input type="checkbox" :value="n.name" v-model="selectedNodes" class="sr-only peer" />
+            <span
+              :class="[
+                'w-4 h-4 rounded flex items-center justify-center shrink-0 transition-all',
+                selectedNodes.includes(n.name)
+                  ? 'bg-brand-500 text-white'
+                  : 'border border-default bg-elevated'
+              ]"
+            >
+              <Icon v-if="selectedNodes.includes(n.name)" name="check" :size="11" stroke-width="3" />
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium fg-primary truncate font-mono">{{ n.name }}</p>
+              <p class="text-xs fg-muted">CPU {{ n.cpu_pct.toFixed(1) }}% &middot; RAM {{ n.ram_pct.toFixed(0) }}%</p>
+            </div>
+          </label>
+        </div>
+        <p v-if="selectedNodes.length > 0 && form.workers_per_node > 0" class="text-xs fg-muted">
+          {{ t('newJob.nodes.totalHelper', { total: totalWorkers, perNode: form.workers_per_node, nodes: selectedNodes.length }) }}
+        </p>
+      </section>
+
       <!-- Storage pools -->
       <section class="card space-y-4">
         <header class="flex items-center justify-between">
           <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.storage') }}</h2>
-          <span class="card-title">Étape 2 / 5</span>
+          <span class="card-title">Étape 3 / 5</span>
         </header>
         <p class="helper">{{ t('newJob.storage.hint') }}</p>
         <div v-if="storagesLoading" class="text-sm fg-muted">{{ t('newJob.storage.loading') }}</div>
@@ -84,12 +136,12 @@
       <section class="card space-y-5">
         <header class="flex items-center justify-between">
           <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.workers') }}</h2>
-          <span class="card-title">Étape 2 / 4</span>
+          <span class="card-title">Étape 4 / 5</span>
         </header>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label class="label">{{ t('newJob.fields.workerCount') }}</label>
-            <input v-model.number="form.worker_count" type="number" min="1" max="20" class="input" required />
+            <label class="label">{{ t('newJob.fields.workersPerNode') }}</label>
+            <input v-model.number="form.workers_per_node" type="number" min="1" max="20" class="input" required />
           </div>
           <div>
             <label class="label">{{ t('newJob.fields.vcpu') }}</label>
@@ -118,7 +170,7 @@
       <section class="card space-y-5">
         <header class="flex items-center justify-between">
           <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.mode') }}</h2>
-          <span class="card-title">Étape 3 / 4</span>
+          <span class="card-title">Étape 5 / 5</span>
         </header>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <label
@@ -241,7 +293,7 @@
 
       <div class="flex items-center justify-between gap-3 pt-2">
         <RouterLink to="/" class="btn-ghost">{{ t('common.cancel') }}</RouterLink>
-        <button type="submit" class="btn-primary btn-lg" :disabled="submitting">
+        <button type="submit" class="btn-primary btn-lg" :disabled="submitting || selectedNodes.length === 0 || form.workers_per_node < 1">
           <Spinner v-if="submitting" :size="16" />
           <Icon v-else name="play" :size="16" />
           {{ submitting ? t('newJob.submitting') : t('newJob.submit') }}
@@ -285,64 +337,136 @@ const error      = ref('')
 const availableStorages = ref([])
 const storagesLoading   = ref(true)
 const storagesError     = ref('')
+const availableNodes    = ref([])
+const nodesLoading      = ref(true)
+const selectedNodes     = ref([])
 
 const form = reactive({
-  name:          '',
-  client_name:   '',
-  mode:          'storage',
-  worker_count:  3,
-  worker_cpu:    4,
-  worker_ram_mb: 4096,
-  os_disk_gb:    20,
-  data_disks:    1,
-  data_disk_gb:  50,
-  storage_pools: [],
-  profiles:      [],
-  stress_config: { workers: 4, timeout: 120, stressors: ['cpu'] },
+  name:             '',
+  client_name:      '',
+  mode:             'storage',
+  workers_per_node: 1,
+  worker_cpu:       4,
+  worker_ram_mb:    4096,
+  os_disk_gb:       20,
+  data_disks:       1,
+  data_disk_gb:     50,
+  storage_pools:    [],
+  profiles:         [],
+  stress_config:    { workers: 4, timeout: 120, stressors: ['cpu'] },
 })
 
+const totalWorkers = computed(() => selectedNodes.value.length * (form.workers_per_node || 0))
+const allNodesSelected = computed(() =>
+  availableNodes.value.length > 0 && selectedNodes.value.length === availableNodes.value.length
+)
+
+function toggleAllNodes() {
+  selectedNodes.value = allNodesSelected.value
+    ? []
+    : availableNodes.value.map(n => n.name)
+}
+
 watch(() => form.mode, () => { error.value = '' })
+
+// React to node selection: refetch storage intersection from /api/proxmox/storages?nodes=
+watch(selectedNodes, async (nodes) => {
+  if (!nodes || nodes.length === 0) {
+    availableStorages.value = []
+    return
+  }
+  storagesLoading.value = true
+  storagesError.value = ''
+  try {
+    const url = '/api/proxmox/storages?nodes=' + encodeURIComponent(nodes.join(','))
+    const r = await fetch(url)
+    if (!r.ok) {
+      const msg = await r.text()
+      storagesError.value = t('newJob.storage.fetchFailed', { msg })
+      availableStorages.value = []
+      return
+    }
+    const list = (await r.json()) || []
+    const filtered = list.filter(s => (s.content || '').split(',').map(c => c.trim()).includes('images'))
+    availableStorages.value = filtered
+
+    // Drop previously selected pools that are no longer available
+    const stillAvailable = new Set(filtered.map(s => s.id))
+    const dropped = form.storage_pools.filter(p => !stillAvailable.has(p))
+    if (dropped.length > 0) {
+      form.storage_pools = form.storage_pools.filter(p => stillAvailable.has(p))
+      error.value = t('newJob.storage.changedToast', { storage: dropped.join(', ') })
+    }
+    if (!filtered.length) {
+      storagesError.value = t('newJob.storage.intersectionEmpty')
+    }
+  } catch (e) {
+    storagesError.value = t('newJob.storage.fetchFailed', { msg: e.message || String(e) })
+    availableStorages.value = []
+  } finally {
+    storagesLoading.value = false
+  }
+}, { deep: true })
 
 onMounted(async () => {
   try { settings.value = await settingsStore.load() } catch (_) {}
   try { profiles.value = await api.listProfiles() ?? [] } catch (_) {}
+
+  // Fetch nodes from /api/overview (cluster + default_node)
+  nodesLoading.value = true
   try {
-    const all = await settingsStore.scanStorages() ?? []
-    // Only keep storages that can host VM disks (content includes "images")
-    availableStorages.value = all.filter(s => (s.content || '').split(',').map(c => c.trim()).includes('images'))
-    if (!availableStorages.value.length) {
-      storagesError.value = 'Aucun storage compatible (content "images") trouvé sur ce cluster.'
+    const r = await fetch('/api/overview')
+    if (r.ok) {
+      const data = await r.json()
+      availableNodes.value = (data.cluster || []).map(n => ({
+        name: n.name,
+        cpu_pct: typeof n.cpu_pct === 'number' ? n.cpu_pct : 0,
+        ram_pct: typeof n.ram_pct === 'number' ? n.ram_pct : 0,
+      }))
+      const defaultNode = data.default_node || ''
+      if (defaultNode && availableNodes.value.find(n => n.name === defaultNode)) {
+        selectedNodes.value = [defaultNode]
+      }
     }
-  } catch (e) {
-    storagesError.value = 'Erreur récupération storages : ' + e.message
+  } catch (_) {
+    // network/JSON failure — leave availableNodes empty; UI shows the empty state
   } finally {
-    storagesLoading.value = false
+    nodesLoading.value = false
   }
 })
 
 async function submit() {
   error.value = ''
+  if (selectedNodes.value.length === 0) {
+    error.value = t('newJob.errors.noNodeSelected')
+    return
+  }
+  if (form.workers_per_node < 1) {
+    error.value = t('newJob.errors.noNodeSelected')
+    return
+  }
   if (form.mode !== 'cpu' && form.profiles.length === 0) {
-    error.value = 'Sélectionnez au moins un profil elbencho.'
+    error.value = t('newJob.errors.profilesEmpty')
     return
   }
   if (form.storage_pools.length === 0) {
-    error.value = 'Sélectionnez au moins un storage pool.'
+    error.value = t('newJob.errors.storagesEmpty')
     return
   }
 
   const basePayload = {
-    name:          form.name,
-    client_name:   form.client_name,
-    mode:          form.mode,
-    worker_count:  form.worker_count,
-    worker_cpu:    form.worker_cpu,
-    worker_ram_mb: form.worker_ram_mb,
-    os_disk_gb:    form.os_disk_gb,
-    data_disks:    form.data_disks,
-    data_disk_gb:  form.data_disk_gb,
-    profiles:      form.mode === 'cpu' ? [] : form.profiles,
-    stress_config: form.mode === 'storage' ? null : {
+    name:             form.name,
+    client_name:      form.client_name,
+    mode:             form.mode,
+    proxmox_nodes:    [...selectedNodes.value],
+    workers_per_node: form.workers_per_node,
+    worker_cpu:       form.worker_cpu,
+    worker_ram_mb:    form.worker_ram_mb,
+    os_disk_gb:       form.os_disk_gb,
+    data_disks:       form.data_disks,
+    data_disk_gb:     form.data_disk_gb,
+    profiles:         form.mode === 'cpu' ? [] : form.profiles,
+    stress_config:    form.mode === 'storage' ? null : {
       ...form.stress_config,
       stressors: [...form.stress_config.stressors],
     },

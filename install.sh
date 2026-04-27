@@ -118,7 +118,7 @@ if command -v systemd-detect-virt >/dev/null 2>&1; then
   esac
 fi
 apt-get install -y -qq "${APT_PACKAGES[@]}" >/dev/null || \
-  info "some packages did not install — PDF generation may be unavailable until a Chromium binary is on PATH"
+  info "some packages did not install - PDF generation may be unavailable until a Chromium binary is on PATH"
 
 # --- directory layout ---
 mkdir -p /opt/benchere/ansible/playbooks

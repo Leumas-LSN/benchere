@@ -55,6 +55,7 @@
         <div>
           <label class="label">{{ t('settings.fields.node') }}</label>
           <input v-model="form.proxmox_node" type="text" placeholder="pve-01" class="input" />
+          <p class="helper">{{ t('settings.fields.nodeHint') }}</p>
         </div>
         <div>
           <label class="label">{{ t('settings.fields.imageStorage') }}</label>
