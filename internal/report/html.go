@@ -280,7 +280,7 @@ func NewGenerator(database *db.DB, profilesDir, version string) *Generator {
 
 // RenderHTML builds the HTML report. lang accepts "fr" (default) or "en".
 func (g *Generator) RenderHTML(job db.Job, results []db.Result, snaps []db.ProxmoxSnapshot, lang string) ([]byte, error) {
-	tmpl, err := template.New("report.html").Parse(reportTmplSrc)
+	tmpl, err := template.New("report.html").Funcs(template.FuncMap{"add": func(a, b int) int { return a + b }}).Parse(reportTmplSrc)
 	if err != nil {
 		return nil, err
 	}

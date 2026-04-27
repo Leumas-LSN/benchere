@@ -2,299 +2,334 @@
 <html lang="{{.Lang}}">
 <head>
 <meta charset="UTF-8">
-<title>Benchere — {{.Job.Name}}</title>
+<title>Benchere - {{.Job.Name}}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap">
 <style>
-  @page { size: A4; margin: 14mm 12mm 16mm 12mm; }
+/* Tokens copied from web/src/style.css (html.dark). Keep in lock-step. */
+:root {
+  --bg-canvas:     #0a0a0a;
+  --bg-surface:    #111113;
+  --bg-elevated:   #18181b;
+  --bg-muted:      #1c1c1f;
 
-  :root {
-    --brand:        #f97316;
-    --brand-soft:   rgba(249, 115, 22, 0.12);
-    --bg:           #0d1117;
-    --bg-card:      #1a1f29;
-    --bg-soft:      #21262d;
-    --ink:          #e6edf3;
-    --ink-mute:     #9ba6b3;
-    --ink-faint:    #6e7681;
-    --line:         #2d333b;
-    --line-soft:    #21262d;
-    --ok:           #3fb950;
-    --ok-soft:      rgba(63, 185, 80, 0.12);
-    --bad:          #f85149;
-    --bad-soft:     rgba(248, 81, 73, 0.12);
-    --neutral-soft: rgba(155, 166, 179, 0.12);
-  }
+  --fg-primary:    #f5f5f5;
+  --fg-secondary:  #a3a3a3;
+  --fg-muted:      #737373;
+  --fg-faint:      #525252;
 
-  * { box-sizing: border-box; }
+  --border-subtle: #1f1f23;
+  --border-default:#26262a;
 
-  body {
-    font-family: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    color: var(--ink);
-    background: var(--bg);
-    margin: 0;
-    font-size: 11pt;
-    line-height: 1.55;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
+  --brand-500:    #f97316;
+  --brand-soft:   rgba(249, 115, 22, 0.10);
 
-  /* Screen layout — continuous scroll, max-width container, no page-break voids.
-     Print rules below restore A4 pagination for wkhtmltopdf. */
-  @media screen {
-    body {
-      padding: 32px 24px 64px;
-      font-size: 14px;
-    }
-    body > section {
-      max-width: 1024px;
-      margin: 0 auto 24px;
-    }
-    .cover {
-      height: auto !important;
-      page-break-after: auto !important;
-      padding: 32px 36px;
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      background: var(--bg-card);
-      gap: 36px;
-    }
-    .cover-hero { margin-top: 0 !important; }
-    .cover-title { font-size: 40px !important; }
-    .cover-meta { margin-top: 0 !important; }
-    .page-break { display: none !important; }
-    .section {
-      padding: 28px 32px;
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      background: var(--bg-card);
-    }
-    .section table { background: var(--bg); }
-    h1 { font-size: 28px !important; }
-    h2 { font-size: 16px !important; }
-  }
+  --status-done:   #4ade80;
+  --status-failed: #f87171;
 
-  .num, .mono { font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-feature-settings: "tnum"; }
+  --chart-grid:    #26262a;
+  --chart-axis:    #737373;
+  --chart-text:    #404040;
+  --chart-iops:    #f97316;
+  --chart-write:   #ea580c;
+  --chart-latency: #7c3aed;
+  --chart-cpu:     #f97316;
+  --chart-ram:     #0ea5e9;
+}
 
-  h1, h2, h3 { font-weight: 600; letter-spacing: -0.015em; margin: 0; color: var(--ink); }
-  h1 { font-size: 32pt; }
-  h2 {
-    font-size: 13pt; margin: 0 0 16px 0; padding-bottom: 10px;
-    display: flex; align-items: center; gap: 12px;
-    border-bottom: 1px solid var(--line);
-  }
-  h2 .num-badge {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 24px; height: 24px; border-radius: 7px;
-    background: var(--brand-soft); color: var(--brand);
-    font-size: 10pt; font-weight: 700;
-    font-family: 'Geist Mono', monospace;
-  }
-  h3 { font-size: 10pt; color: var(--ink-mute); margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.08em; }
+* { box-sizing: border-box; }
 
-  .cover {
-    page-break-after: always;
-    height: 268mm;
-    display: flex; flex-direction: column; justify-content: space-between;
-    padding: 4mm 0;
-  }
-  .cover-top {
-    display: flex; align-items: center; gap: 18px;
-    padding-bottom: 24px;
-    border-bottom: 1px solid var(--line);
-  }
-  .wordmark {
-    display: inline-flex; align-items: baseline;
-    font-family: 'Geist', sans-serif;
-    font-size: 26pt; line-height: 1; letter-spacing: -0.04em;
-    color: var(--ink);
-  }
-  .wordmark .bench { font-weight: 800; }
-  .wordmark .ere   { font-weight: 600; opacity: 0.55; }
-  .wordmark .bar {
-    display: inline-block; width: 4px; height: 24pt;
-    background: var(--brand);
-    transform: skew(-18deg);
-    margin: 0 7px; border-radius: 1px;
-  }
-  .cover-tagline {
-    margin-left: 4px; font-size: 8.5pt;
-    color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.16em;
-    font-weight: 600;
-  }
+body {
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  color: var(--fg-primary);
+  background: var(--bg-canvas);
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
 
-  .cover-hero { margin-top: 48px; }
-  .cover-eyebrow {
-    color: var(--brand); font-weight: 600; font-size: 10pt;
-    text-transform: uppercase; letter-spacing: 0.16em;
-    margin-bottom: 18px;
-  }
-  .cover-title {
-    font-size: 36pt; font-weight: 700; line-height: 1.05;
-    color: var(--ink); margin-bottom: 14px; letter-spacing: -0.025em;
-  }
-  .cover-sub {
-    font-size: 14pt; color: var(--ink-mute); font-weight: 400;
-  }
-  .cover-sub strong { color: var(--ink); font-weight: 600; }
+.container {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+}
 
-  .cover-meta {
-    margin-top: 48px;
-    display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px;
-  }
-  .meta-card {
-    border: 1px solid var(--line); border-radius: 12px;
-    padding: 16px 20px;
-    background: var(--bg-card);
-  }
-  .meta-label {
-    font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.1em;
-    color: var(--ink-faint); font-weight: 600; margin-bottom: 6px;
-  }
-  .meta-value {
-    font-size: 13pt; color: var(--ink); font-weight: 600;
-  }
+.num, .mono {
+  font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
 
-  .cover-bottom {
-    border-top: 1px solid var(--line);
-    padding-top: 16px;
-    display: flex; justify-content: space-between; align-items: center;
-    color: var(--ink-faint); font-size: 9pt;
-  }
-  .cover-stripe {
-    height: 4px; border-radius: 2px;
-    background: linear-gradient(90deg, var(--brand) 0%, transparent 100%);
-    margin-bottom: 18px;
-  }
+/* ---- HEADER ---- */
+.report-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 28px;
+}
+.wordmark {
+  display: inline-flex; align-items: baseline;
+  font-family: 'Geist', sans-serif;
+  font-size: 22px; line-height: 1; letter-spacing: -0.04em;
+  color: var(--fg-primary);
+}
+.wordmark .bench { font-weight: 800; }
+.wordmark .ere   { font-weight: 600; opacity: 0.55; }
+.wordmark .bar {
+  display: inline-block; width: 3px; height: 18px;
+  background: var(--brand-500);
+  transform: skew(-18deg);
+  margin: 0 6px; border-radius: 1px;
+}
+.tagline {
+  margin-left: 14px;
+  font-size: 11px;
+  color: var(--fg-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+}
+.issue-date {
+  text-align: right;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+.issue-date .num { color: var(--fg-secondary); }
 
-  .section { margin-bottom: 28px; }
-  .page-break { page-break-after: always; }
-  .lead {
-    color: var(--ink-mute); font-size: 10pt; margin: -4px 0 16px 0;
-  }
+/* ---- IDENTITY BLOCK ---- */
+.identity { margin-bottom: 32px; }
+.identity h1 {
+  font-size: 28px; font-weight: 700; letter-spacing: -0.02em;
+  color: var(--fg-primary); margin: 0 0 12px 0;
+}
+.meta-line {
+  font-size: 14px; color: var(--fg-secondary); margin-bottom: 14px;
+}
+.meta-line .meta-key { color: var(--fg-muted); }
+.meta-line .meta-sep { color: var(--fg-faint); margin: 0 8px; }
+.counts {
+  font-size: 14px; color: var(--fg-secondary);
+}
+.counts .pass { color: var(--status-done); font-weight: 600; }
+.counts .fail { color: var(--status-failed); font-weight: 600; }
+.counts .na   { color: var(--fg-muted); }
+.counts .sep  { color: var(--fg-faint); margin: 0 6px; }
 
-  table {
-    width: 100%; border-collapse: separate; border-spacing: 0;
-    margin: 0 0 14px 0; font-size: 9.5pt;
-    border: 1px solid var(--line); border-radius: 12px;
-    overflow: hidden;
-    background: var(--bg-card);
-  }
-  thead th {
-    background: var(--bg-soft);
-    color: var(--ink-mute); font-weight: 600;
-    font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.08em;
-    text-align: left; padding: 10px 14px;
-    border-bottom: 1px solid var(--line);
-  }
-  thead th.right { text-align: right; }
-  thead th.center { text-align: center; }
-  tbody td {
-    padding: 11px 14px;
-    border-bottom: 1px solid var(--line-soft);
-    color: var(--ink);
-  }
-  tbody tr:last-child td { border-bottom: 0; }
-  tbody td.right { text-align: right; }
-  tbody td.center { text-align: center; }
-  tbody td.profile {
-    font-family: 'Geist Mono', monospace;
-    font-size: 9pt; font-weight: 600;
-    color: var(--brand);
-  }
+/* ---- KPI TILES ---- */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 32px;
+}
+.kpi {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.kpi-label {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--fg-muted);
+  margin-bottom: 8px;
+}
+.kpi-value {
+  display: flex; align-items: baseline; gap: 8px;
+  margin-bottom: 4px;
+}
+.kpi-value .num {
+  font-size: 26px; font-weight: 700;
+  color: var(--fg-primary);
+}
+.kpi-unit {
+  font-size: 13px; font-weight: 500; color: var(--fg-muted);
+}
+.kpi-sub {
+  font-size: 11px; color: var(--fg-faint);
+  font-family: 'Geist Mono', monospace;
+}
 
-  .pill {
-    display: inline-flex; align-items: center; gap: 5px;
-    padding: 2px 9px; border-radius: 6px;
-    font-size: 8.5pt; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.08em;
-    border: 1px solid;
-  }
-  .pill-pass { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
-  .pill-fail { background: var(--bad-soft); color: var(--bad); border-color: var(--bad); }
-  .pill-na   { background: var(--neutral-soft); color: var(--ink-mute); border-color: var(--line); }
+/* ---- SECTIONS ---- */
+section { margin-bottom: 36px; }
+h2 {
+  font-size: 14px; font-weight: 600;
+  color: var(--fg-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 6px 0;
+}
+.lead {
+  font-size: 13px; color: var(--fg-muted);
+  margin: 0 0 16px 0;
+}
 
-  .chart-card {
-    border: 1px solid var(--line); border-radius: 12px;
-    background: var(--bg-card); padding: 16px 18px 10px 18px;
-    margin-bottom: 14px;
-    page-break-inside: avoid;
-  }
-  .chart-card-header {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 10px;
-  }
-  .chart-card-title {
-    font-family: 'Geist Mono', monospace;
-    font-size: 9.5pt; font-weight: 600; color: var(--brand);
-  }
-  .chart-card-meta {
-    font-size: 8pt; text-transform: uppercase; letter-spacing: 0.1em;
-    color: var(--ink-faint); font-weight: 600;
-  }
-  .chart-card svg { display: block; width: 100%; height: auto; }
+/* ---- TABLES ---- */
+table {
+  width: 100%;
+  border-collapse: separate; border-spacing: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 13px;
+}
+thead th {
+  background: var(--bg-muted);
+  color: var(--fg-muted);
+  font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  text-align: left; padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+thead th.right { text-align: right; }
+thead th.center { text-align: center; }
+tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--fg-primary);
+}
+tbody tr:last-child td { border-bottom: 0; }
+tbody td.right { text-align: right; }
+tbody td.center { text-align: center; }
+.profile-cell {
+  font-family: 'Geist Mono', monospace; font-size: 12px; font-weight: 600;
+  color: var(--fg-primary);
+}
 
-  .doc-footer {
-    border-top: 1px solid var(--line);
-    margin-top: 22px; padding-top: 12px;
-    display: flex; justify-content: space-between;
-    color: var(--ink-faint); font-size: 8.5pt;
-  }
-  .footer-mark {
-    color: var(--brand); font-weight: 600;
-  }
+/* ---- PILLS ---- */
+.pill {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 4px;
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.pill-pass { background: rgba(74, 222, 128, 0.12); color: var(--status-done); }
+.pill-fail { background: rgba(248, 113, 113, 0.12); color: var(--status-failed); }
+.pill-na   { background: var(--bg-muted); color: var(--fg-muted); }
+
+/* ---- CHART CARDS ---- */
+.chart-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 20px 24px;
+  margin-bottom: 14px;
+}
+.chart-card-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 14px;
+}
+.chart-card-title {
+  font-family: 'Geist Mono', monospace;
+  font-size: 13px; font-weight: 600;
+  color: var(--fg-primary);
+}
+.chart-card-meta {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--fg-muted); font-weight: 600;
+}
+.chart-card svg { display: block; width: 100%; height: auto; }
+
+/* ---- INFRA LINE ---- */
+.infra-line {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 14px 18px;
+  font-size: 13px;
+  color: var(--fg-primary);
+  margin-bottom: 14px;
+  font-family: 'Geist Mono', monospace;
+}
+
+/* ---- FOOTER ---- */
+.footer {
+  margin-top: 48px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex; justify-content: space-between;
+  font-size: 11px; color: var(--fg-faint);
+}
+
+/* ---- PRINT ---- */
+@media print {
+  body { background: var(--bg-canvas); color: var(--fg-primary); }
+  .container { padding: 12mm 10mm; max-width: none; }
+  section, .chart-card, table, .kpi { break-inside: avoid; }
+}
+
+@page { size: A4; margin: 12mm; }
 </style>
 </head>
 <body>
+<div class="container">
 
-<section class="cover">
-  <div class="cover-top">
+<!-- HEADER -->
+<header class="report-header">
+  <div>
     <span class="wordmark">
       <span class="bench">bench</span><span class="bar"></span><span class="ere">ere</span>
     </span>
-    <span class="cover-tagline">Infrastructure benchmark report</span>
-    <div style="margin-left:auto; text-align:right; color:var(--ink-faint); font-size:9pt;">
-      <div>{{.I18n.IssuedOn}} {{.Job.CreatedAt.Format "02 / 01 / 2006"}}</div>
-      <div class="num">{{.Job.CreatedAt.Format "15:04"}}</div>
-    </div>
+    <span class="tagline">Infrastructure benchmark report</span>
   </div>
-
-  <div class="cover-hero">
-    <div class="cover-stripe"></div>
-    <div class="cover-eyebrow">{{.I18n.ReportEyebrow}}</div>
-    <h1 class="cover-title">{{.Job.Name}}</h1>
-    <div class="cover-sub">{{.I18n.PreparedFor}} <strong>{{.Job.ClientName}}</strong></div>
+  <div class="issue-date">
+    <div>{{.I18n.IssuedOn}} {{.Job.CreatedAt.Format "02/01/2006"}}</div>
+    <div class="num">{{.Job.CreatedAt.Format "15:04"}}</div>
   </div>
+</header>
 
-  <div class="cover-meta">
-    <div class="meta-card">
-      <div class="meta-label">{{.I18n.Client}}</div>
-      <div class="meta-value">{{.Job.ClientName}}</div>
-    </div>
-    <div class="meta-card">
-      <div class="meta-label">{{.I18n.Mode}}</div>
-      <div class="meta-value">{{.Job.Mode}}</div>
-    </div>
-    <div class="meta-card">
-      <div class="meta-label">{{.I18n.RunDate}}</div>
-      <div class="meta-value">{{.Job.CreatedAt.Format "02/01/2006 — 15:04"}}</div>
-    </div>
-    <div class="meta-card">
-      <div class="meta-label">{{.I18n.JobID}}</div>
-      <div class="meta-value num" style="font-size:10pt;">{{.Job.ID}}</div>
-    </div>
+<!-- IDENTITY -->
+<section class="identity">
+  <h1>{{.Job.Name}}</h1>
+  <div class="meta-line">
+    <span class="meta-key">{{.I18n.Client}}</span> {{.Job.ClientName}}
+    <span class="meta-sep">|</span>
+    <span class="meta-key">{{.I18n.ModeLabel}}</span> {{.Job.Mode}}
+    <span class="meta-sep">|</span>
+    <span class="meta-key">{{.I18n.DateLabel}}</span> {{.Job.CreatedAt.Format "02/01/2006 15:04"}}
+    <span class="meta-sep">|</span>
+    <span class="meta-key">{{.I18n.DurationLabel}}</span> <span class="num">{{.Duration}}</span>
+    <span class="meta-sep">|</span>
+    <span class="meta-key">{{.I18n.JobID}}</span> <span class="num">{{slice .Job.ID 0 8}}</span>
   </div>
-
-  <div class="cover-bottom">
-    <div>{{.I18n.AutoGenerated}}</div>
-    <div class="footer-mark">Benchere · Infrastructure benchmark</div>
+  <div class="counts">
+    <span>{{.Counts.Total}} {{.I18n.CountsTotalLabel}}</span>
+    {{if gt .Counts.Pass 0}}
+    <span class="sep">|</span><span class="pass">{{.Counts.Pass}} {{.I18n.CountsPass}}</span>
+    {{end}}
+    {{if gt .Counts.Fail 0}}
+    <span class="sep">|</span><span class="fail">{{.Counts.Fail}} {{.I18n.CountsFail}}</span>
+    {{end}}
+    {{if gt .Counts.NA 0}}
+    <span class="sep">|</span><span class="na">{{.Counts.NA}} {{.I18n.CountsNA}}</span>
+    {{end}}
   </div>
 </section>
 
-<section class="section">
-  <h2><span class="num-badge">1</span>{{.I18n.SummaryTitle}}</h2>
-  <p class="lead">{{.I18n.SummaryLead}}</p>
+<!-- KPIs -->
+{{if .KPIs}}
+<section>
+  <div class="kpi-grid">
+    {{range .KPIs}}
+    <div class="kpi">
+      <div class="kpi-label">{{.Label}}</div>
+      <div class="kpi-value">
+        <span class="num">{{.Value}}</span>
+        {{if .Unit}}<span class="kpi-unit">{{.Unit}}</span>{{end}}
+      </div>
+      {{if .Sub}}<div class="kpi-sub">{{.Sub}}</div>{{end}}
+    </div>
+    {{end}}
+  </div>
+</section>
+{{end}}
+
+<!-- PERFORMANCE -->
+<section>
+  <h2>{{.I18n.PerformanceTitle}}</h2>
+  <p class="lead">{{.I18n.PerformanceLead}}</p>
   <table>
     <thead>
       <tr>
@@ -310,7 +345,7 @@
     <tbody>
       {{range .Summary}}
       <tr>
-        <td class="profile">{{.ProfileName}}</td>
+        <td class="profile-cell">{{.ProfileName}}</td>
         <td class="right num">{{printf "%.0f" .MaxIOPSRead}}</td>
         <td class="right num">{{printf "%.0f" .MaxIOPSWrite}}</td>
         <td class="right num">{{printf "%.1f" .MaxThroughputRead}}</td>
@@ -327,12 +362,11 @@
   </table>
 </section>
 
-<div class="page-break"></div>
-
-<section class="section">
-  <h2><span class="num-badge">2</span>{{.I18n.IOPSChartsTitle}}</h2>
-  <p class="lead">{{.I18n.IOPSChartsLead}}</p>
-
+<!-- IOPS CHARTS -->
+{{if .IOPSCharts}}
+<section>
+  <h2>{{.I18n.ChartsIOPSTitle}}</h2>
+  <p class="lead">{{.I18n.ChartsIOPSLead}}</p>
   {{range .IOPSCharts}}
   <div class="chart-card">
     <div class="chart-card-header">
@@ -343,13 +377,13 @@
   </div>
   {{end}}
 </section>
+{{end}}
 
-<div class="page-break"></div>
-
-<section class="section">
-  <h2><span class="num-badge">3</span>{{.I18n.ClusterTitle}}</h2>
-  <p class="lead">{{.I18n.ClusterLead}}</p>
-
+<!-- CLUSTER LOAD -->
+{{if .NodeChartSVG}}
+<section>
+  <h2>{{.I18n.ClusterLoadTitle}}</h2>
+  <p class="lead">{{.I18n.ClusterLoadLead}}</p>
   <div class="chart-card">
     <div class="chart-card-header">
       <div class="chart-card-title">{{.I18n.ClusterCPUTitle}}</div>
@@ -357,7 +391,7 @@
     </div>
     {{.NodeChartSVG}}
   </div>
-
+  {{if .NodeSummary}}
   <table>
     <thead>
       <tr>
@@ -370,7 +404,7 @@
     <tbody>
       {{range .NodeSummary}}
       <tr>
-        <td class="profile">{{.NodeName}}</td>
+        <td class="profile-cell">{{.NodeName}}</td>
         <td class="right num">{{printf "%.1f" .MaxCPU}}</td>
         <td class="right num">{{printf "%.1f" .AvgCPU}}</td>
         <td class="right num">{{printf "%.1f" .AvgRAM}}</td>
@@ -378,12 +412,84 @@
       {{end}}
     </tbody>
   </table>
+  {{end}}
+</section>
+{{end}}
 
-  <div class="doc-footer">
-    <div>Benchere — {{.Job.Name}}</div>
-    <div class="footer-mark">{{.I18n.Confidential}} · {{.Job.ClientName}}</div>
+<!-- INFRASTRUCTURE -->
+<section>
+  <h2>{{.I18n.InfraTitle}}</h2>
+  <div class="infra-line">
+    {{.Infra.WorkerCount}} workers
+    {{if .Infra.StoragePool}}| storage {{.Infra.StoragePool}}{{end}}
+    {{if .Infra.Nodes}}| cluster {{range $i, $n := .Infra.Nodes}}{{if $i}}, {{end}}{{$n}}{{end}}{{end}}
   </div>
+  {{if .Workers}}
+  <table>
+    <thead>
+      <tr>
+        <th>{{.I18n.HdrWorker}}</th>
+        <th>{{.I18n.HdrVMID}}</th>
+        <th>{{.I18n.Node}}</th>
+        <th>{{.I18n.HdrIP}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range $i, $w := .Workers}}
+      <tr>
+        <td class="profile-cell">worker-{{add $i 1}}</td>
+        <td class="num">{{$w.VMID}}</td>
+        <td>{{$w.ProxmoxNode}}</td>
+        <td class="num">{{$w.IP}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{end}}
 </section>
 
+<!-- PROFILES -->
+{{if .Profiles}}
+<section>
+  <h2>{{.I18n.ProfilesTitle}}</h2>
+  <p class="lead">{{.I18n.ProfilesLead}}</p>
+  <table>
+    <thead>
+      <tr>
+        <th>{{.I18n.Profile}}</th>
+        <th>{{.I18n.HdrBlockSize}}</th>
+        <th>{{.I18n.HdrRWRatio}}</th>
+        <th>{{.I18n.HdrPattern}}</th>
+        <th class="right">{{.I18n.HdrRuntime}}</th>
+        <th class="right">{{.I18n.HdrThresholdIOPSR}}</th>
+        <th class="right">{{.I18n.HdrThresholdIOPSW}}</th>
+        <th class="right">{{.I18n.HdrThresholdLatency}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Profiles}}
+      <tr>
+        <td class="profile-cell">{{.Name}}</td>
+        <td>{{.BlockSize}}</td>
+        <td>{{.RWRatio}}</td>
+        <td>{{.Pattern}}</td>
+        <td class="right num">{{if gt .RuntimeSec 0}}{{.RuntimeSec}}{{else}}-{{end}}</td>
+        <td class="right num">{{if gt .ThresholdIOPSR 0}}{{.ThresholdIOPSR}}{{else}}-{{end}}</td>
+        <td class="right num">{{if gt .ThresholdIOPSW 0}}{{.ThresholdIOPSW}}{{else}}-{{end}}</td>
+        <td class="right num">{{if gt .ThresholdLatencyMs 0.0}}{{printf "%.2f" .ThresholdLatencyMs}}{{else}}-{{end}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}
+
+<!-- FOOTER -->
+<div class="footer">
+  <div>Benchere {{.Version}} | job {{slice .Job.ID 0 8}}</div>
+  <div>{{.I18n.Confidential}} | {{.Job.ClientName}}</div>
+</div>
+
+</div>
 </body>
 </html>
