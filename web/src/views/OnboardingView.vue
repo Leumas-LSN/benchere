@@ -74,11 +74,9 @@
             class="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full bg-soft fg-muted uppercase tracking-wider font-semibold"
           >{{ t('common.comingSoon') }}</span>
           <div class="flex items-start gap-4">
-            <div
-              class="w-12 h-12 rounded-lg flex items-center justify-center shrink-0 overflow-hidden"
-              :style="{ background: h.brandColor }"
-              v-html="h.logoSVG"
-            ></div>
+            <div class="w-12 h-12 rounded-lg flex items-center justify-center shrink-0 overflow-hidden bg-white">
+              <img :src="h.logoSrc" :alt="t(h.labelKey)" class="w-10 h-10 object-contain" />
+            </div>
             <div class="min-w-0 flex-1">
               <p class="font-semibold fg-primary">{{ t(h.labelKey) }}</p>
               <p class="text-xs fg-muted mt-1">{{ h.subtitle }}</p>
@@ -226,29 +224,11 @@ const languages = [
   { code: 'en', flag: '🇬🇧', label: 'English',  subtitle: 'United States, UK, global…' },
 ]
 
-const proxmoxLogo = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="w-full h-full p-2">
-  <path fill="#fff" d="M28 22h22c12.1 0 21.5 7.7 21.5 19.4 0 11.5-9.4 19.2-21.5 19.2H40v17.4H28V22zm12 11v16.6h9.3c5.6 0 9.7-3 9.7-8.3 0-5.4-4.1-8.3-9.7-8.3H40z"/>
-</svg>`
-const vsphereLogo = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="w-full h-full p-2">
-  <path fill="#fff" d="M14 22l28 56h6L62 47l14 31h6l28-56-12-1-22 44-12-26 4-9-12 0-12 26-22-44z"/>
-</svg>`
-const hypervLogo = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="w-full h-full p-2">
-  <g fill="#fff">
-    <rect x="20" y="20" width="26" height="26" rx="2"/>
-    <rect x="54" y="20" width="26" height="26" rx="2"/>
-    <rect x="20" y="54" width="26" height="26" rx="2"/>
-    <rect x="54" y="54" width="26" height="26" rx="2"/>
-  </g>
-</svg>`
-const azureLogo = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="w-full h-full p-2">
-  <path fill="#fff" d="M40 18 L18 76 L36 76 L70 18 Z M50 44 L62 76 L82 76 L70 50 L58 50 Z"/>
-</svg>`
-
 const hypervisors = [
-  { id: 'proxmox',    labelKey: 'onboarding.hypervisorStep.proxmox',    subtitle: 'Proxmox VE 8.x and 9.x', logoSVG: proxmoxLogo, brandColor: '#e57000', enabled: true  },
-  { id: 'vsphere',    labelKey: 'onboarding.hypervisorStep.vsphere',    subtitle: 'VMware ESXi / vSphere',  logoSVG: vsphereLogo, brandColor: '#717074', enabled: false },
-  { id: 'hyperv',     labelKey: 'onboarding.hypervisorStep.hyperv',     subtitle: 'Microsoft Hyper-V',      logoSVG: hypervLogo,  brandColor: '#0078d4', enabled: false },
-  { id: 'azureLocal', labelKey: 'onboarding.hypervisorStep.azureLocal', subtitle: 'Azure Stack HCI',        logoSVG: azureLogo,   brandColor: '#0078d4', enabled: false },
+  { id: 'proxmox',    labelKey: 'onboarding.hypervisorStep.proxmox',    subtitle: 'Proxmox VE 8.x and 9.x', logoSrc: '/hypervisor-logos/proxmox.png',     enabled: true  },
+  { id: 'vsphere',    labelKey: 'onboarding.hypervisorStep.vsphere',    subtitle: 'VMware ESXi / vSphere',  logoSrc: '/hypervisor-logos/vsphere.jpg',     enabled: false },
+  { id: 'hyperv',     labelKey: 'onboarding.hypervisorStep.hyperv',     subtitle: 'Microsoft Hyper-V',      logoSrc: '/hypervisor-logos/hyperv.png',      enabled: false },
+  { id: 'azureLocal', labelKey: 'onboarding.hypervisorStep.azureLocal', subtitle: 'Azure Stack HCI',        logoSrc: '/hypervisor-logos/azure-local.png', enabled: false },
 ]
 
 const form = reactive({
