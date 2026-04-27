@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/Leumas-LSN/benchere/internal/proxmox"
@@ -17,11 +18,11 @@ type settingsPayload struct {
 	ImageStorage       string `json:"image_storage"`
 	ProxmoxNode        string `json:"proxmox_node"`
 	ClusterName        string `json:"cluster_name"`
-	NetworkBridge  string `json:"network_bridge"`
-	WorkerIPPool   string `json:"worker_ip_pool"`
-	WorkerCIDR     string `json:"worker_cidr"`
-	WorkerGateway  string `json:"worker_gateway"`
-	SSHKeyPath     string `json:"ssh_key_path"`
+	NetworkBridge      string `json:"network_bridge"`
+	WorkerIPPool       string `json:"worker_ip_pool"`
+	WorkerCIDR         string `json:"worker_cidr"`
+	WorkerGateway      string `json:"worker_gateway"`
+	SSHKeyPath         string `json:"ssh_key_path"`
 }
 
 func splitToken(t string) (id, secret string) {
@@ -87,16 +88,16 @@ func (s *Server) postSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pairs := map[string]string{
-		"proxmox_url":     p.ProxmoxURL,
-		"proxmox_node":    p.ProxmoxNode,
+		"proxmox_url":    p.ProxmoxURL,
+		"proxmox_node":   p.ProxmoxNode,
 		"cluster_name":   p.ClusterName,
-		"storage_pool":    p.StoragePool,
-		"image_storage":   p.ImageStorage,
-		"network_bridge":  p.NetworkBridge,
-		"worker_ip_pool":  p.WorkerIPPool,
-		"worker_cidr":     p.WorkerCIDR,
-		"worker_gateway":  p.WorkerGateway,
-		"ssh_key_path":    p.SSHKeyPath,
+		"storage_pool":   p.StoragePool,
+		"image_storage":  p.ImageStorage,
+		"network_bridge": p.NetworkBridge,
+		"worker_ip_pool": p.WorkerIPPool,
+		"worker_cidr":    p.WorkerCIDR,
+		"worker_gateway": p.WorkerGateway,
+		"ssh_key_path":   p.SSHKeyPath,
 	}
 	if token != "" {
 		pairs["proxmox_token"] = token
@@ -174,13 +175,60 @@ func (s *Server) getStorages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	client := proxmox.NewClient(proxmoxURL, proxmoxToken)
-	storages, err := client.GetStorages(r.Context())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+
+	nodesParam := strings.TrimSpace(r.URL.Query().Get("nodes"))
+	if nodesParam == "" {
+		// Backwards-compatible path: cluster-wide listing.
+		storages, err := client.GetStorages(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(storages)
 		return
 	}
+
+	// Multi-node path: intersection of storages active on every listed node,
+	// keeping only those whose content includes "images" (i.e. usable for VM disks).
+	nodes := strings.Split(nodesParam, ",")
+	for i := range nodes {
+		nodes[i] = strings.TrimSpace(nodes[i])
+	}
+	intersection := map[string]proxmox.StorageInfo{}
+	for i, node := range nodes {
+		if node == "" {
+			continue
+		}
+		storages, err := client.GetNodeStorages(r.Context(), node)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("list storages on node %s: %v", node, err), http.StatusBadGateway)
+			return
+		}
+		seen := map[string]proxmox.StorageInfo{}
+		for _, sg := range storages {
+			if !strings.Contains(sg.Content, "images") {
+				continue
+			}
+			seen[sg.ID] = sg
+		}
+		if i == 0 {
+			intersection = seen
+			continue
+		}
+		for id := range intersection {
+			if _, ok := seen[id]; !ok {
+				delete(intersection, id)
+			}
+		}
+	}
+	out := make([]proxmox.StorageInfo, 0, len(intersection))
+	for _, sg := range intersection {
+		out = append(out, sg)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(storages)
+	json.NewEncoder(w).Encode(out)
 }
 
 func (s *Server) getBridges(w http.ResponseWriter, r *http.Request) {
