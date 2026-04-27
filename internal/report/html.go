@@ -4,8 +4,10 @@ import (
 	"bytes"
 	_ "embed"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/Leumas-LSN/benchere/internal/db"
@@ -232,6 +234,15 @@ type reportData struct {
 	IOPSCharts   []IOPSChart
 	NodeChartSVG template.HTML
 	NodeSummary  []NodeSummaryRow
+
+	// v1.9 redesign additions
+	Counts   JobCounts
+	KPIs     []KPI
+	Infra    InfraLine
+	Workers  []db.Worker
+	Profiles []ProfileConfig
+	Version  string
+	Duration string
 }
 
 // JobCounts aggregates verdicts across profiles for the report header.
@@ -386,5 +397,53 @@ func (g *Generator) buildReportData(job db.Job, results []db.Result, snaps []db.
 		data.NodeSummary = append(data.NodeSummary, row)
 	}
 
+	// v1.9 additions: counts, KPIs, infra, profiles, version, duration.
+	data.Counts = computeCounts(data.Summary)
+	data.KPIs = computeKPIs(job.Mode, data.Summary, data.NodeSummary)
+
+	if g.db != nil {
+		workers, _ := g.db.ListWorkersByJob(job.ID)
+		data.Workers = workers
+		data.Infra = computeInfraLine(job, workers)
+	}
+
+	// db.Job has no Profiles field; use the profile names that produced
+	// results (extracted from the Summary built above).
+	names := make([]string, 0, len(data.Summary))
+	for _, s := range data.Summary {
+		names = append(names, s.ProfileName)
+	}
+	data.Profiles = readProfileConfigs(g.ProfilesDir, g.db, names)
+
+	data.Version = g.Version
+	data.Duration = formatDuration(job)
+
 	return data
+}
+
+// splitProfileNames splits a comma-separated string of profile names into a
+// slice, trimming whitespace and dropping empty entries.
+func splitProfileNames(raw string) []string {
+	out := []string{}
+	for _, p := range strings.Split(raw, ",") {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// formatDuration returns a "Xm Ys" string for a finished job, or "-" when
+// FinishedAt is nil or the duration is non-positive.
+func formatDuration(job db.Job) string {
+	if job.FinishedAt == nil {
+		return "-"
+	}
+	d := job.FinishedAt.Sub(job.CreatedAt)
+	if d <= 0 {
+		return "-"
+	}
+	mins := int(d.Minutes())
+	secs := int(d.Seconds()) % 60
+	return fmt.Sprintf("%dm %ds", mins, secs)
 }
