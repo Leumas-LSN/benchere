@@ -4,8 +4,10 @@ import (
 	"bytes"
 	_ "embed"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/Leumas-LSN/benchere/internal/db"
@@ -69,6 +71,35 @@ type reportI18n struct {
 	CPUAvg          string
 	RAMAvg          string
 	Confidential    string
+
+	// New keys for v1.9 report redesign
+	CountsTotalLabel    string
+	CountsPass          string
+	CountsFail          string
+	CountsNA            string
+	PerformanceTitle    string
+	PerformanceLead     string
+	ChartsIOPSTitle     string
+	ChartsIOPSLead      string
+	ClusterLoadTitle    string
+	ClusterLoadLead     string
+	InfraTitle          string
+	InfraLine           string
+	ProfilesTitle       string
+	ProfilesLead        string
+	HdrBlockSize        string
+	HdrRWRatio          string
+	HdrPattern          string
+	HdrRuntime          string
+	HdrThresholdIOPSR   string
+	HdrThresholdIOPSW   string
+	HdrThresholdLatency string
+	HdrWorker           string
+	HdrVMID             string
+	HdrIP               string
+	DurationLabel       string
+	ModeLabel           string
+	DateLabel           string
 }
 
 var reportI18nFR = reportI18n{
@@ -103,6 +134,34 @@ var reportI18nFR = reportI18n{
 	CPUAvg:          "CPU avg (%)",
 	RAMAvg:          "RAM avg (%)",
 	Confidential:    "Confidentiel",
+
+	CountsTotalLabel:    "profils testes",
+	CountsPass:          "pass",
+	CountsFail:          "fail",
+	CountsNA:            "N/A",
+	PerformanceTitle:    "Performance",
+	PerformanceLead:     "Synthese des performances mesurees par profil. Pass / Fail selon les seuils de validation.",
+	ChartsIOPSTitle:     "IOPS dans le temps",
+	ChartsIOPSLead:      "Evolution des IOPS Read par echantillon, par profil teste.",
+	ClusterLoadTitle:    "Charge cluster",
+	ClusterLoadLead:     "Utilisation CPU des nodes Proxmox pendant la duree du benchmark.",
+	InfraTitle:          "Infrastructure",
+	InfraLine:           "{count} workers ({cpu} vCPU - {ram} MB - {disk} GB) - storage {pool} - cluster {nodes}",
+	ProfilesTitle:       "Profils testes",
+	ProfilesLead:        "Configuration de chaque profil et ses seuils de validation.",
+	HdrBlockSize:        "Block size",
+	HdrRWRatio:          "Ratio R/W",
+	HdrPattern:          "Pattern",
+	HdrRuntime:          "Runtime (s)",
+	HdrThresholdIOPSR:   "Seuil IOPS R",
+	HdrThresholdIOPSW:   "Seuil IOPS W",
+	HdrThresholdLatency: "Seuil latence (ms)",
+	HdrWorker:           "Worker",
+	HdrVMID:             "VMID",
+	HdrIP:               "IP",
+	DurationLabel:       "Duree",
+	ModeLabel:           "Mode",
+	DateLabel:           "Date",
 }
 
 var reportI18nEN = reportI18n{
@@ -137,6 +196,34 @@ var reportI18nEN = reportI18n{
 	CPUAvg:          "Avg CPU (%)",
 	RAMAvg:          "Avg RAM (%)",
 	Confidential:    "Confidential",
+
+	CountsTotalLabel:    "profiles tested",
+	CountsPass:          "pass",
+	CountsFail:          "fail",
+	CountsNA:            "N/A",
+	PerformanceTitle:    "Performance",
+	PerformanceLead:     "Performance summary per profile. Pass / Fail against thresholds defined in each profile.",
+	ChartsIOPSTitle:     "IOPS over time",
+	ChartsIOPSLead:      "Read IOPS evolution per sample, per profile.",
+	ClusterLoadTitle:    "Cluster load",
+	ClusterLoadLead:     "CPU usage of Proxmox nodes during the benchmark.",
+	InfraTitle:          "Infrastructure",
+	InfraLine:           "{count} workers ({cpu} vCPU - {ram} MB - {disk} GB) - storage {pool} - cluster {nodes}",
+	ProfilesTitle:       "Profiles tested",
+	ProfilesLead:        "Configuration of each profile and its validation thresholds.",
+	HdrBlockSize:        "Block size",
+	HdrRWRatio:          "R/W ratio",
+	HdrPattern:          "Pattern",
+	HdrRuntime:          "Runtime (s)",
+	HdrThresholdIOPSR:   "IOPS R threshold",
+	HdrThresholdIOPSW:   "IOPS W threshold",
+	HdrThresholdLatency: "Latency threshold (ms)",
+	HdrWorker:           "Worker",
+	HdrVMID:             "VMID",
+	HdrIP:               "IP",
+	DurationLabel:       "Duration",
+	ModeLabel:           "Mode",
+	DateLabel:           "Date",
 }
 
 type reportData struct {
@@ -147,17 +234,53 @@ type reportData struct {
 	IOPSCharts   []IOPSChart
 	NodeChartSVG template.HTML
 	NodeSummary  []NodeSummaryRow
+
+	// v1.9 redesign additions
+	Counts   JobCounts
+	KPIs     []KPI
+	Infra    InfraLine
+	Workers  []db.Worker
+	Profiles []ProfileConfig
+	Version  string
+	Duration string
+}
+
+// JobCounts aggregates verdicts across profiles for the report header.
+type JobCounts struct {
+	Total int
+	Pass  int
+	Fail  int
+	NA    int
+}
+
+func computeCounts(summary []ProfileSummary) JobCounts {
+	c := JobCounts{Total: len(summary)}
+	for _, s := range summary {
+		switch s.Verdict {
+		case "pass":
+			c.Pass++
+		case "fail":
+			c.Fail++
+		default:
+			c.NA++
+		}
+	}
+	return c
 }
 
 type Generator struct {
-	db *db.DB
+	db          *db.DB
+	ProfilesDir string
+	Version     string
 }
 
-func NewGenerator(database *db.DB) *Generator { return &Generator{db: database} }
+func NewGenerator(database *db.DB, profilesDir, version string) *Generator {
+	return &Generator{db: database, ProfilesDir: profilesDir, Version: version}
+}
 
 // RenderHTML builds the HTML report. lang accepts "fr" (default) or "en".
 func (g *Generator) RenderHTML(job db.Job, results []db.Result, snaps []db.ProxmoxSnapshot, lang string) ([]byte, error) {
-	tmpl, err := template.New("report.html").Parse(reportTmplSrc)
+	tmpl, err := template.New("report.html").Funcs(template.FuncMap{"add": func(a, b int) int { return a + b }}).Parse(reportTmplSrc)
 	if err != nil {
 		return nil, err
 	}
@@ -180,8 +303,8 @@ func (g *Generator) buildReportData(job db.Job, results []db.Result, snaps []db.
 	data := reportData{Job: job, Lang: lang, I18n: i18n}
 
 	const (
-		brandOrange = "#f97316"
-		clusterBlue = "#58a6ff"
+		brandOrange = "var(--chart-iops, #f97316)"
+		clusterBlue = "var(--chart-cpu, #f97316)"
 	)
 
 	byProfile := make(map[string][]db.Result)
@@ -274,5 +397,53 @@ func (g *Generator) buildReportData(job db.Job, results []db.Result, snaps []db.
 		data.NodeSummary = append(data.NodeSummary, row)
 	}
 
+	// v1.9 additions: counts, KPIs, infra, profiles, version, duration.
+	data.Counts = computeCounts(data.Summary)
+	data.KPIs = computeKPIs(job.Mode, data.Summary, data.NodeSummary)
+
+	if g.db != nil {
+		workers, _ := g.db.ListWorkersByJob(job.ID)
+		data.Workers = workers
+		data.Infra = computeInfraLine(job, workers)
+	}
+
+	// db.Job has no Profiles field; use the profile names that produced
+	// results (extracted from the Summary built above).
+	names := make([]string, 0, len(data.Summary))
+	for _, s := range data.Summary {
+		names = append(names, s.ProfileName)
+	}
+	data.Profiles = readProfileConfigs(g.ProfilesDir, g.db, names)
+
+	data.Version = g.Version
+	data.Duration = formatDuration(job)
+
 	return data
+}
+
+// splitProfileNames splits a comma-separated string of profile names into a
+// slice, trimming whitespace and dropping empty entries.
+func splitProfileNames(raw string) []string {
+	out := []string{}
+	for _, p := range strings.Split(raw, ",") {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// formatDuration returns a "Xm Ys" string for a finished job, or "-" when
+// FinishedAt is nil or the duration is non-positive.
+func formatDuration(job db.Job) string {
+	if job.FinishedAt == nil {
+		return "-"
+	}
+	d := job.FinishedAt.Sub(job.CreatedAt)
+	if d <= 0 {
+		return "-"
+	}
+	mins := int(d.Minutes())
+	secs := int(d.Seconds()) % 60
+	return fmt.Sprintf("%dm %ds", mins, secs)
 }
