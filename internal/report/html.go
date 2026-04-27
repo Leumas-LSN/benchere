@@ -135,7 +135,7 @@ var reportI18nFR = reportI18n{
 	RAMAvg:          "RAM avg (%)",
 	Confidential:    "Confidentiel",
 
-	CountsTotalLabel:    "{count} profils testes",
+	CountsTotalLabel:    "profils testes",
 	CountsPass:          "pass",
 	CountsFail:          "fail",
 	CountsNA:            "N/A",
@@ -197,7 +197,7 @@ var reportI18nEN = reportI18n{
 	RAMAvg:          "Avg RAM (%)",
 	Confidential:    "Confidential",
 
-	CountsTotalLabel:    "{count} profiles tested",
+	CountsTotalLabel:    "profiles tested",
 	CountsPass:          "pass",
 	CountsFail:          "fail",
 	CountsNA:            "N/A",
