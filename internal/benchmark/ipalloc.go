@@ -112,14 +112,24 @@ func extractIPFromIPConfig0(s string) string {
 }
 
 // AllocateIPs picks N free IPs from the pool, excluding any that are
-// currently assigned to other VMs on the node. Returns an error if the
-// pool doesn't have enough free addresses.
-func AllocateIPs(ctx context.Context, c *proxmox.Client, node string, pool IPPool, count int) ([]net.IP, error) {
-	used, err := usedIPs(ctx, c, node)
-	if err != nil {
-		// Don't block on transient API issues — proceed and let CreateVM
-		// surface a clearer error if we try to use a colliding IP.
-		used = map[string]bool{}
+// currently assigned to other VMs on ANY of the provided nodes. The
+// aggregation reflects the L2-shared nature of the worker subnet: an
+// address used on one node would still collide on another in the same VLAN.
+// Returns an error if the pool does not have enough free addresses across
+// the union of these nodes.
+func AllocateIPs(ctx context.Context, c *proxmox.Client, nodes []string, pool IPPool, count int) ([]net.IP, error) {
+	used := map[string]bool{}
+	for _, node := range nodes {
+		u, err := usedIPs(ctx, c, node)
+		if err != nil {
+			// Do not block on transient API issues; proceed with empty set
+			// for this node (CreateVM will surface a clearer error if a
+			// chosen IP collides).
+			continue
+		}
+		for ip := range u {
+			used[ip] = true
+		}
 	}
 	var allocated []net.IP
 	for _, candidate := range pool.IPs() {
@@ -131,5 +141,6 @@ func AllocateIPs(ctx context.Context, c *proxmox.Client, node string, pool IPPoo
 			return allocated, nil
 		}
 	}
-	return nil, fmt.Errorf("ip pool exhausted: need %d free IPs in %s-%s, have %d", count, pool.From, pool.To, len(allocated))
+	return nil, fmt.Errorf("ip pool exhausted: need %d free IPs across nodes %v in %s-%s, have %d",
+		count, nodes, pool.From, pool.To, len(allocated))
 }
