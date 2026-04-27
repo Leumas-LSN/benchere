@@ -18,7 +18,7 @@ func LineChart(title string, points []Point, width, height int, color string) st
 	_ = title
 
 	if color == "" {
-		color = "#f97316"
+		color = "var(--chart-iops, #f97316)"
 	}
 
 	w := float64(width)
@@ -43,8 +43,8 @@ func LineChart(title string, points []Point, width, height int, color string) st
 		y := padTop + plotH/2
 		return fmt.Sprintf(
 			`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" width="100%%" preserveAspectRatio="xMidYMid meet">`+
-				`<rect x="0" y="0" width="%d" height="%d" rx="8" fill="#fafafa"/>`+
-				`<text x="%.1f" y="%.1f" text-anchor="middle" font-size="11" fill="#737373" font-family="-apple-system, sans-serif">Échantillon unique : %.0f</text>`+
+				`<rect x="0" y="0" width="%d" height="%d" rx="8" fill="var(--bg-surface, #fafafa)"/>`+
+				`<text x="%.1f" y="%.1f" text-anchor="middle" font-size="11" fill="var(--chart-axis, #737373)" font-family="-apple-system, sans-serif">Échantillon unique : %.0f</text>`+
 				`<circle cx="%.1f" cy="%.1f" r="5" fill="%s"/>`+
 				`</svg>`,
 			width, height, width, height,
@@ -102,25 +102,25 @@ func LineChart(title string, points []Point, width, height int, color string) st
 		v := niceMax * float64(i) / float64(ticks)
 		y := padTop + plotH - v*scaleY
 		grid.WriteString(fmt.Sprintf(
-			`<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="#eef0f3" stroke-width="1"%s/>`,
+			`<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="var(--chart-grid, #eef0f3)" stroke-width="1"%s/>`,
 			padLeft, y, w-padRight, y,
 			func() string {
 				if i == 0 {
-					return ` stroke="#d4d4d4"`
+					return ` stroke="var(--border-default, #d4d4d4)"`
 				}
 				return ""
 			}(),
 		))
 		grid.WriteString(fmt.Sprintf(
-			`<text x="%.1f" y="%.1f" text-anchor="end" font-size="9" fill="#737373" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">%s</text>`,
+			`<text x="%.1f" y="%.1f" text-anchor="end" font-size="9" fill="var(--chart-axis, #737373)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">%s</text>`,
 			padLeft-8, y+3, formatTick(v),
 		))
 	}
 
 	// X axis label (just first / last index)
 	xLabels := fmt.Sprintf(
-		`<text x="%.1f" y="%.1f" text-anchor="start" font-size="9" fill="#a3a3a3" font-family="ui-monospace, monospace">échantillon 1</text>`+
-			`<text x="%.1f" y="%.1f" text-anchor="end" font-size="9" fill="#a3a3a3" font-family="ui-monospace, monospace">échantillon %d</text>`,
+		`<text x="%.1f" y="%.1f" text-anchor="start" font-size="9" fill="var(--chart-axis, #a3a3a3)" font-family="ui-monospace, monospace">échantillon 1</text>`+
+			`<text x="%.1f" y="%.1f" text-anchor="end" font-size="9" fill="var(--chart-axis, #a3a3a3)" font-family="ui-monospace, monospace">échantillon %d</text>`,
 		padLeft, h-8,
 		w-padRight, h-8, len(points),
 	)
@@ -153,8 +153,8 @@ func LineChart(title string, points []Point, width, height int, color string) st
 func emptyChart(width, height int, msg string) string {
 	return fmt.Sprintf(
 		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" width="100%%" preserveAspectRatio="xMidYMid meet">`+
-			`<rect width="%d" height="%d" rx="8" fill="#fafafa"/>`+
-			`<text x="%d" y="%d" text-anchor="middle" font-size="11" fill="#a3a3a3" font-family="-apple-system, sans-serif">%s</text>`+
+			`<rect width="%d" height="%d" rx="8" fill="var(--bg-surface, #fafafa)"/>`+
+			`<text x="%d" y="%d" text-anchor="middle" font-size="11" fill="var(--chart-axis, #a3a3a3)" font-family="-apple-system, sans-serif">%s</text>`+
 			`</svg>`,
 		width, height, width, height, width/2, height/2, msg,
 	)

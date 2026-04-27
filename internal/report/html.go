@@ -303,8 +303,8 @@ func (g *Generator) buildReportData(job db.Job, results []db.Result, snaps []db.
 	data := reportData{Job: job, Lang: lang, I18n: i18n}
 
 	const (
-		brandOrange = "#f97316"
-		clusterBlue = "#58a6ff"
+		brandOrange = "var(--chart-iops, #f97316)"
+		clusterBlue = "var(--chart-cpu, #f97316)"
 	)
 
 	byProfile := make(map[string][]db.Result)
