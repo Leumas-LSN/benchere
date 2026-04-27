@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/Leumas-LSN/benchere/internal/ansible"
 	"github.com/Leumas-LSN/benchere/internal/db"
@@ -19,6 +20,7 @@ import (
 	"github.com/Leumas-LSN/benchere/internal/stress"
 	"github.com/Leumas-LSN/benchere/internal/ws"
 	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 )
 
 type Orchestrator struct {
@@ -89,13 +91,17 @@ func (o *Orchestrator) fail(jobID string, err error) error {
 	return err
 }
 
-func (o *Orchestrator) cleanup(ctx context.Context, node string, workerDBIDs []string, workerVMIDs []int) {
-	for _, vmid := range workerVMIDs {
-		_ = o.Proxmox.StopVM(ctx, node, vmid)
-		_ = o.Proxmox.DeleteVM(ctx, node, vmid)
-	}
-	for _, wid := range workerDBIDs {
-		_ = o.DB.UpdateWorkerStatus(wid, "done")
+// cleanup stops and deletes the VMs of the given workers, on whatever node
+// each worker lives on (worker.ProxmoxNode). Used both by the defer in
+// RunExisting and by CancelJob / RecoverOrphanedJobs.
+func (o *Orchestrator) cleanup(ctx context.Context, workers []db.Worker) {
+	for _, w := range workers {
+		if w.VMID == 0 || w.ProxmoxNode == "" {
+			continue
+		}
+		_ = o.Proxmox.StopVM(ctx, w.ProxmoxNode, w.VMID)
+		_ = o.Proxmox.DeleteVM(ctx, w.ProxmoxNode, w.VMID)
+		_ = o.DB.UpdateWorkerStatus(w.ID, "done")
 	}
 }
 
@@ -125,20 +131,36 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 		return o.fail(job.ID, err)
 	}
 
+	if len(cfg.ProxmoxNodes) == 0 {
+		return o.fail(job.ID, fmt.Errorf("no proxmox nodes selected"))
+	}
+	if cfg.WorkersPerNode <= 0 {
+		return o.fail(job.ID, fmt.Errorf("workers_per_node must be >= 1"))
+	}
+
+	// 1. Cloud image - must be importable on each selected node. With a
+	//    shared storage (Ceph/NFS) one EnsureCloudImage is enough; with a
+	//    local-per-node image storage we must import on each node. We loop:
+	//    EnsureCloudImage is idempotent on shared storage (instant return).
 	imageStorage := cfg.ImageStorage
 	if imageStorage == "" {
 		imageStorage = "local"
 	}
-	imageVol, err := o.Proxmox.EnsureCloudImage(ctx, cfg.ProxmoxNode, imageStorage, cfg.CloudImageURL)
-	if err != nil {
-		return o.fail(job.ID, fmt.Errorf("cloud image: %w", err))
+	var imageVol string
+	for _, node := range cfg.ProxmoxNodes {
+		v, err := o.Proxmox.EnsureCloudImage(ctx, node, imageStorage, cfg.CloudImageURL)
+		if err != nil {
+			return o.fail(job.ID, fmt.Errorf("cloud image on node %s: %w", node, err))
+		}
+		imageVol = v // same volid string regardless of node for shared storages
 	}
+
 	networkBridge, _ := o.DB.GetSetting("network_bridge")
 
-	// Static IP allocation: when worker_ip_pool / worker_cidr / worker_gateway
-	// are set we assign each worker an address from the pool via cloud-init's
-	// ipconfig0. This sidesteps the qemu-guest-agent IP discovery that's
-	// brittle on cloud images that don't ship the agent.
+	totalWorkers := len(cfg.ProxmoxNodes) * cfg.WorkersPerNode
+	specs := SplitWorkers(cfg.ProxmoxNodes, cfg.WorkersPerNode)
+
+	// 2. Static IP allocation (aggregated across all selected nodes).
 	var staticIPs []net.IP
 	var pool IPPool
 	if poolStr, _ := o.DB.GetSetting("worker_ip_pool"); poolStr != "" {
@@ -150,87 +172,115 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 			return o.fail(job.ID, fmt.Errorf("worker network: %w", err))
 		}
 		pool = p
-		staticIPs, err = AllocateIPs(ctx, o.Proxmox, cfg.ProxmoxNode, pool, cfg.WorkerCount)
+		staticIPs, err = AllocateIPs(ctx, o.Proxmox, cfg.ProxmoxNodes, pool, totalWorkers)
 		if err != nil {
 			return o.fail(job.ID, err)
 		}
 	}
 
-	o.emitProvStep(job.ID, "vm_creating", "Création des machines virtuelles...", 0.05)
-	var workerIPs []string
-	var workerDBIDs []string
-	var workerVMIDs []int
-	defer func() { o.cleanup(context.Background(), cfg.ProxmoxNode, workerDBIDs, workerVMIDs) }()
-
-	for i := 0; i < cfg.WorkerCount; i++ {
+	// 3. Allocate VMIDs serially (avoid races on Proxmox NextVMID).
+	for i := range specs {
 		vmid, err := o.Proxmox.NextVMID(ctx)
 		if err != nil {
 			return o.fail(job.ID, fmt.Errorf("allocate vmid: %w", err))
 		}
-		workerVMIDs = append(workerVMIDs, vmid)
+		specs[i].VMID = vmid
+	}
 
-		workerID := uuid.NewString()
-		w := db.Worker{ID: workerID, JobID: job.ID, VMID: vmid, ProxmoxNode: cfg.ProxmoxNode, Status: "provisioning"}
-		_ = o.DB.CreateWorker(w)
-
-		ipConfig := ""
-		var assignedIP string
-		if len(staticIPs) > 0 {
-			assignedIP = staticIPs[i].String()
-			ipConfig = pool.IPConfig(staticIPs[i])
+	// 4. Pre-insert worker rows so cleanup can find them on cancellation.
+	createdWorkers := make([]db.Worker, len(specs))
+	for i, spec := range specs {
+		w := db.Worker{
+			ID:          uuid.NewString(),
+			JobID:       job.ID,
+			VMID:        spec.VMID,
+			ProxmoxNode: spec.Node,
+			Status:      "provisioning",
 		}
-
-		if _, err := o.Proxmox.CreateVM(ctx, proxmox.VMCreateParams{
-			Node:        cfg.ProxmoxNode,
-			VMID:        vmid,
-			Name:        fmt.Sprintf("benchere-worker-%d", i+1),
-			Cores:       cfg.WorkerCPU,
-			MemoryMB:    cfg.WorkerRAMMB,
-			OSDiskGB:    cfg.OSDiskGB,
-			DataDisks:   cfg.DataDisks,
-			DataDiskGB:  cfg.DataDiskGB,
-			StoragePool: cfg.StoragePool,
-			SSHKey:      readFile(o.SSHKey + ".pub"),
-			ImagePath:   imageVol,
-			Bridge:      networkBridge,
-			IPConfig:    ipConfig,
-		}); err != nil {
-			return o.fail(job.ID, fmt.Errorf("create vm %d: %w", vmid, err))
+		if err := o.DB.CreateWorker(w); err != nil {
+			return o.fail(job.ID, fmt.Errorf("create worker row: %w", err))
 		}
-		if err := o.Proxmox.StartVM(ctx, cfg.ProxmoxNode, vmid); err != nil {
-			return o.fail(job.ID, err)
-		}
+		createdWorkers[i] = w
+	}
+	defer func() { o.cleanup(context.Background(), createdWorkers) }()
 
-		var ip string
-		if assignedIP != "" {
-			// Static IP path: we already know it. Just wait for sshd to come up.
-			if err := o.Proxmox.WaitForSSH(ctx, assignedIP); err != nil {
-				return o.fail(job.ID, err)
+	o.emitProvStep(job.ID, "vm_creating", "Creation des machines virtuelles...", 0.05)
+
+	// 5. Parallel CreateVM + StartVM + WaitForSSH with concurrency cap = 8.
+	g, gctx := errgroup.WithContext(ctx)
+	sem := make(chan struct{}, 8)
+	workerIPs := make([]string, len(specs))
+	var doneCount int64
+
+	for i := range specs {
+		i := i
+		spec := specs[i]
+		g.Go(func() error {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			ipConfig := ""
+			var assignedIP string
+			if len(staticIPs) > 0 {
+				assignedIP = staticIPs[i].String()
+				ipConfig = pool.IPConfig(staticIPs[i])
 			}
-			ip = assignedIP
-		} else {
-			// Legacy path: discover via qemu-guest-agent. Requires the agent
-			// to be installed in the worker image (or via a cicustom snippet).
-			discovered, err := o.Proxmox.WaitForIP(ctx, cfg.ProxmoxNode, vmid)
-			if err != nil {
-				return o.fail(job.ID, err)
+
+			if _, err := o.Proxmox.CreateVM(gctx, proxmox.VMCreateParams{
+				Node:        spec.Node,
+				VMID:        spec.VMID,
+				Name:        fmt.Sprintf("benchere-worker-%d", spec.Index+1),
+				Cores:       cfg.WorkerCPU,
+				MemoryMB:    cfg.WorkerRAMMB,
+				OSDiskGB:    cfg.OSDiskGB,
+				DataDisks:   cfg.DataDisks,
+				DataDiskGB:  cfg.DataDiskGB,
+				StoragePool: cfg.StoragePool,
+				SSHKey:      readFile(o.SSHKey + ".pub"),
+				ImagePath:   imageVol,
+				Bridge:      networkBridge,
+				IPConfig:    ipConfig,
+			}); err != nil {
+				return fmt.Errorf("create vm %d on %s: %w", spec.VMID, spec.Node, err)
 			}
-			if err := o.Proxmox.InjectSSHKey(ctx, cfg.ProxmoxNode, vmid, readFile(o.SSHKey+".pub")); err != nil {
-				return o.fail(job.ID, fmt.Errorf("inject ssh key vm %d: %w", vmid, err))
+			if err := o.Proxmox.StartVM(gctx, spec.Node, spec.VMID); err != nil {
+				return fmt.Errorf("start vm %d on %s: %w", spec.VMID, spec.Node, err)
 			}
-			ip = discovered
-		}
-		_ = o.DB.UpdateWorkerIP(workerID, ip)
-		workerIPs = append(workerIPs, ip)
-		workerDBIDs = append(workerDBIDs, workerID)
-		o.emitProvStep(job.ID, "vm_creating",
-			fmt.Sprintf("VM %d/%d créée", i+1, cfg.WorkerCount),
-			0.05+0.35*float64(i+1)/float64(cfg.WorkerCount),
-		)
+
+			var ip string
+			if assignedIP != "" {
+				if err := o.Proxmox.WaitForSSH(gctx, assignedIP); err != nil {
+					return fmt.Errorf("wait ssh %s: %w", assignedIP, err)
+				}
+				ip = assignedIP
+			} else {
+				discovered, err := o.Proxmox.WaitForIP(gctx, spec.Node, spec.VMID)
+				if err != nil {
+					return fmt.Errorf("wait ip vm %d: %w", spec.VMID, err)
+				}
+				if err := o.Proxmox.InjectSSHKey(gctx, spec.Node, spec.VMID, readFile(o.SSHKey+".pub")); err != nil {
+					return fmt.Errorf("inject ssh key vm %d: %w", spec.VMID, err)
+				}
+				ip = discovered
+			}
+
+			_ = o.DB.UpdateWorkerIP(createdWorkers[i].ID, ip)
+			workerIPs[i] = ip
+			n := atomic.AddInt64(&doneCount, 1)
+			o.emitProvStep(job.ID, "vm_creating",
+				fmt.Sprintf("VM %d/%d creee", n, totalWorkers),
+				0.05+0.35*float64(n)/float64(totalWorkers),
+			)
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return o.fail(job.ID, err)
 	}
 
 	o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "provisioning", Phase: "ansible"})
-	o.emitProvStep(job.ID, "ansible_start", "Déploiement Ansible (elbencho + stress-ng)...", 0.60)
+	o.emitProvStep(job.ID, "ansible_start", "Deploiement Ansible (elbencho + stress-ng)...", 0.60)
 	targets := make([]ansible.WorkerTarget, len(workerIPs))
 	for i, ip := range workerIPs {
 		targets[i] = ansible.WorkerTarget{IP: ip}
@@ -242,11 +292,11 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 		}
 		return o.fail(job.ID, fmt.Errorf("ansible: %w\n\n--- ssh -vvv to %s ---\n%s", err, workerIPs[0], diag))
 	}
-	o.emitProvStep(job.ID, "ansible_done", "Ansible terminé, vérification des workers...", 0.90)
-	for _, wid := range workerDBIDs {
-		_ = o.DB.UpdateWorkerStatus(wid, "ready")
+	o.emitProvStep(job.ID, "ansible_done", "Ansible termine, verification des workers...", 0.90)
+	for _, w := range createdWorkers {
+		_ = o.DB.UpdateWorkerStatus(w.ID, "ready")
 	}
-	o.emitProvStep(job.ID, "workers_ready", "Tous les workers sont prêts. Démarrage du benchmark...", 1.0)
+	o.emitProvStep(job.ID, "workers_ready", "Tous les workers sont prets. Demarrage du benchmark...", 1.0)
 
 	_ = o.DB.UpdateJobStatus(job.ID, "running")
 
@@ -289,11 +339,11 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 			go elbencho.TailCSV(metricCtx, liveCSV, metricsCh)
 			go o.persistMetrics(metricCtx, job.ID, profileName, metricsCh)
 
-			targets := buildTargets(cfg.DataDisks)
+			runTargets := buildTargets(cfg.DataDisks)
 			err = elbencho.Run(ctx, elbencho.RunConfig{
 				Hosts:       workerIPs,
 				ConfigFile:  profileFile,
-				Targets:     targets,
+				Targets:     runTargets,
 				LiveCSVPath: liveCSV,
 				CSVPath:     finalCSV,
 				Label:       profileName,
@@ -326,19 +376,9 @@ func (o *Orchestrator) RecoverOrphanedJobs(ctx context.Context) {
 		if job.Status == "done" || job.Status == "failed" || job.Status == "cancelled" {
 			continue
 		}
-		log.Printf("[recovery] orphaned job %s (status=%s) — cleaning up", job.ID, job.Status)
+		log.Printf("[recovery] orphaned job %s (status=%s) - cleaning up", job.ID, job.Status)
 		workers, _ := o.DB.ListWorkersByJob(job.ID)
-		node, _ := o.DB.GetSetting("proxmox_node")
-		node = strings.ToLower(node)
-		for _, w := range workers {
-			n := w.ProxmoxNode
-			if n == "" {
-				n = node
-			}
-			_ = o.Proxmox.StopVM(ctx, n, w.VMID)
-			_ = o.Proxmox.DeleteVM(ctx, n, w.VMID)
-			_ = o.DB.UpdateWorkerStatus(w.ID, "done")
-		}
+		o.cleanup(ctx, workers)
 		_ = o.DB.FailJob(job.ID, "server restarted mid-run")
 	}
 }
@@ -349,25 +389,14 @@ func (o *Orchestrator) CancelJob(ctx context.Context, jobID string) error {
 		return err
 	}
 	workers, _ := o.DB.ListWorkersByJob(jobID)
-	node, _ := o.DB.GetSetting("proxmox_node")
-	node = strings.ToLower(node)
-	for _, w := range workers {
-		n := w.ProxmoxNode
-		if n == "" {
-			n = node
-		}
-		_ = o.Proxmox.StopVM(ctx, n, w.VMID)
-		_ = o.Proxmox.DeleteVM(ctx, n, w.VMID)
-		_ = o.DB.UpdateWorkerStatus(w.ID, "done")
-	}
+	o.cleanup(ctx, workers)
 	o.emit(jobID, ws.EventJobStatus, ws.JobStatusPayload{Status: "cancelled"})
 	return nil
 }
 
-
 // sshDiagnose runs ssh -vvv against a worker with the master's keypair and
 // returns the captured stderr (where ssh writes its verbose output). Used
-// when ansible fails so the failure message tells us exactly what SSH saw —
+// when ansible fails so the failure message tells us exactly what SSH saw -
 // which key it offered, which the server accepted/rejected, etc.
 func sshDiagnose(keyPath, ip string) string {
 	cmd := exec.Command("ssh",
