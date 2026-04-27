@@ -69,6 +69,35 @@ type reportI18n struct {
 	CPUAvg          string
 	RAMAvg          string
 	Confidential    string
+
+	// New keys for v1.9 report redesign
+	CountsTotalLabel    string
+	CountsPass          string
+	CountsFail          string
+	CountsNA            string
+	PerformanceTitle    string
+	PerformanceLead     string
+	ChartsIOPSTitle     string
+	ChartsIOPSLead      string
+	ClusterLoadTitle    string
+	ClusterLoadLead     string
+	InfraTitle          string
+	InfraLine           string
+	ProfilesTitle       string
+	ProfilesLead        string
+	HdrBlockSize        string
+	HdrRWRatio          string
+	HdrPattern          string
+	HdrRuntime          string
+	HdrThresholdIOPSR   string
+	HdrThresholdIOPSW   string
+	HdrThresholdLatency string
+	HdrWorker           string
+	HdrVMID             string
+	HdrIP               string
+	DurationLabel       string
+	ModeLabel           string
+	DateLabel           string
 }
 
 var reportI18nFR = reportI18n{
@@ -103,6 +132,34 @@ var reportI18nFR = reportI18n{
 	CPUAvg:          "CPU avg (%)",
 	RAMAvg:          "RAM avg (%)",
 	Confidential:    "Confidentiel",
+
+	CountsTotalLabel:    "{count} profils testes",
+	CountsPass:          "pass",
+	CountsFail:          "fail",
+	CountsNA:            "N/A",
+	PerformanceTitle:    "Performance",
+	PerformanceLead:     "Synthese des performances mesurees par profil. Pass / Fail selon les seuils de validation.",
+	ChartsIOPSTitle:     "IOPS dans le temps",
+	ChartsIOPSLead:      "Evolution des IOPS Read par echantillon, par profil teste.",
+	ClusterLoadTitle:    "Charge cluster",
+	ClusterLoadLead:     "Utilisation CPU des nodes Proxmox pendant la duree du benchmark.",
+	InfraTitle:          "Infrastructure",
+	InfraLine:           "{count} workers ({cpu} vCPU - {ram} MB - {disk} GB) - storage {pool} - cluster {nodes}",
+	ProfilesTitle:       "Profils testes",
+	ProfilesLead:        "Configuration de chaque profil et ses seuils de validation.",
+	HdrBlockSize:        "Block size",
+	HdrRWRatio:          "Ratio R/W",
+	HdrPattern:          "Pattern",
+	HdrRuntime:          "Runtime (s)",
+	HdrThresholdIOPSR:   "Seuil IOPS R",
+	HdrThresholdIOPSW:   "Seuil IOPS W",
+	HdrThresholdLatency: "Seuil latence (ms)",
+	HdrWorker:           "Worker",
+	HdrVMID:             "VMID",
+	HdrIP:               "IP",
+	DurationLabel:       "Duree",
+	ModeLabel:           "Mode",
+	DateLabel:           "Date",
 }
 
 var reportI18nEN = reportI18n{
@@ -137,6 +194,34 @@ var reportI18nEN = reportI18n{
 	CPUAvg:          "Avg CPU (%)",
 	RAMAvg:          "Avg RAM (%)",
 	Confidential:    "Confidential",
+
+	CountsTotalLabel:    "{count} profiles tested",
+	CountsPass:          "pass",
+	CountsFail:          "fail",
+	CountsNA:            "N/A",
+	PerformanceTitle:    "Performance",
+	PerformanceLead:     "Performance summary per profile. Pass / Fail against thresholds defined in each profile.",
+	ChartsIOPSTitle:     "IOPS over time",
+	ChartsIOPSLead:      "Read IOPS evolution per sample, per profile.",
+	ClusterLoadTitle:    "Cluster load",
+	ClusterLoadLead:     "CPU usage of Proxmox nodes during the benchmark.",
+	InfraTitle:          "Infrastructure",
+	InfraLine:           "{count} workers ({cpu} vCPU - {ram} MB - {disk} GB) - storage {pool} - cluster {nodes}",
+	ProfilesTitle:       "Profiles tested",
+	ProfilesLead:        "Configuration of each profile and its validation thresholds.",
+	HdrBlockSize:        "Block size",
+	HdrRWRatio:          "R/W ratio",
+	HdrPattern:          "Pattern",
+	HdrRuntime:          "Runtime (s)",
+	HdrThresholdIOPSR:   "IOPS R threshold",
+	HdrThresholdIOPSW:   "IOPS W threshold",
+	HdrThresholdLatency: "Latency threshold (ms)",
+	HdrWorker:           "Worker",
+	HdrVMID:             "VMID",
+	HdrIP:               "IP",
+	DurationLabel:       "Duration",
+	ModeLabel:           "Mode",
+	DateLabel:           "Date",
 }
 
 type reportData struct {
