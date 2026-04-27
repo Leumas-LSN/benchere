@@ -13,9 +13,10 @@ import (
 )
 
 type overviewResponse struct {
-	ActiveJobs []overviewJob `json:"active_jobs"`
-	RecentJobs []overviewJob `json:"recent_jobs"`
-	Cluster    []clusterNode `json:"cluster"`
+	ActiveJobs  []overviewJob `json:"active_jobs"`
+	RecentJobs  []overviewJob `json:"recent_jobs"`
+	Cluster     []clusterNode `json:"cluster"`
+	DefaultNode string        `json:"default_node"`
 }
 
 type overviewJob struct {
@@ -77,6 +78,12 @@ func (srv *Server) getOverview(w http.ResponseWriter, r *http.Request) {
 			oj.FinishedAt = &ts
 		}
 		resp.RecentJobs = append(resp.RecentJobs, oj)
+	}
+
+	if defaultNode, err := srv.DB.GetSetting("proxmox_node"); err == nil {
+		resp.DefaultNode = defaultNode
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		log.Printf("overview: GetSetting proxmox_node: %v", err)
 	}
 
 	proxmoxURL, err := srv.DB.GetSetting("proxmox_url")
