@@ -234,6 +234,29 @@ type reportData struct {
 	NodeSummary  []NodeSummaryRow
 }
 
+// JobCounts aggregates verdicts across profiles for the report header.
+type JobCounts struct {
+	Total int
+	Pass  int
+	Fail  int
+	NA    int
+}
+
+func computeCounts(summary []ProfileSummary) JobCounts {
+	c := JobCounts{Total: len(summary)}
+	for _, s := range summary {
+		switch s.Verdict {
+		case "pass":
+			c.Pass++
+		case "fail":
+			c.Fail++
+		default:
+			c.NA++
+		}
+	}
+	return c
+}
+
 type Generator struct {
 	db *db.DB
 }
