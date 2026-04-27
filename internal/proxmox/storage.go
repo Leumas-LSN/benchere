@@ -130,3 +130,27 @@ func parseProxmoxError(body []byte) string {
 	}
 	return strings.TrimSpace(string(body))
 }
+
+// GetNodeStorages returns storages active on the given node, filtering out
+// disabled or inactive ones. Used by the API endpoint that computes the
+// storage intersection across multiple selected nodes.
+func (c *Client) GetNodeStorages(ctx context.Context, node string) ([]StorageInfo, error) {
+	var raw []struct {
+		Storage string `json:"storage"`
+		Type    string `json:"type"`
+		Content string `json:"content"`
+		Active  int    `json:"active"`
+		Enabled int    `json:"enabled"`
+	}
+	if err := c.getJSON(ctx, fmt.Sprintf("/nodes/%s/storage", node), &raw); err != nil {
+		return nil, err
+	}
+	result := make([]StorageInfo, 0, len(raw))
+	for _, s := range raw {
+		if s.Active != 1 || s.Enabled != 1 {
+			continue
+		}
+		result = append(result, StorageInfo{ID: s.Storage, Type: s.Type, Content: s.Content})
+	}
+	return result, nil
+}
