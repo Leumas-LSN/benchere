@@ -10,28 +10,28 @@ import (
 	"log"
 	"net/http"
 	"sort"
-	"strings"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/Leumas-LSN/benchere/internal/benchmark"
 	"github.com/Leumas-LSN/benchere/internal/db"
 	"github.com/Leumas-LSN/benchere/internal/proxmox"
 	"github.com/Leumas-LSN/benchere/internal/stress"
+	"github.com/go-chi/chi/v5"
 )
 
 type createJobRequest struct {
-	Name         string         `json:"name"`
-	ClientName   string         `json:"client_name"`
-	Mode         string         `json:"mode"`
-	WorkerCount  int            `json:"worker_count"`
-	WorkerCPU    int            `json:"worker_cpu"`
-	WorkerRAMMB  int            `json:"worker_ram_mb"`
-	OSDiskGB     int            `json:"os_disk_gb"`
-	DataDisks    int            `json:"data_disks"`
-	DataDiskGB   int            `json:"data_disk_gb"`
-	StoragePool  string         `json:"storage_pool,omitempty"`
-	Profiles     []string       `json:"profiles"`
-	StressConfig *stress.Config `json:"stress_config,omitempty"`
+	Name           string         `json:"name"`
+	ClientName     string         `json:"client_name"`
+	Mode           string         `json:"mode"`
+	ProxmoxNodes   []string       `json:"proxmox_nodes"`
+	WorkersPerNode int            `json:"workers_per_node"`
+	WorkerCPU      int            `json:"worker_cpu"`
+	WorkerRAMMB    int            `json:"worker_ram_mb"`
+	OSDiskGB       int            `json:"os_disk_gb"`
+	DataDisks      int            `json:"data_disks"`
+	DataDiskGB     int            `json:"data_disk_gb"`
+	StoragePool    string         `json:"storage_pool,omitempty"`
+	Profiles       []string       `json:"profiles"`
+	StressConfig   *stress.Config `json:"stress_config,omitempty"`
 }
 
 func (s *Server) listJobs(w http.ResponseWriter, r *http.Request) {
@@ -69,18 +69,41 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(req.ProxmoxNodes) == 0 {
+		http.Error(w, "proxmox_nodes must be a non-empty list", http.StatusBadRequest)
+		return
+	}
+	if req.WorkersPerNode < 1 {
+		http.Error(w, "workers_per_node must be >= 1", http.StatusBadRequest)
+		return
+	}
+
 	proxmoxURL, _ := s.DB.GetSetting("proxmox_url")
 	proxmoxToken, _ := s.DB.GetSetting("proxmox_token")
 	storagePool, _ := s.DB.GetSetting("storage_pool")
 	if req.StoragePool != "" {
 		storagePool = req.StoragePool
 	}
-	proxmoxNode, _ := s.DB.GetSetting("proxmox_node")
 	imageStorage, _ := s.DB.GetSetting("image_storage")
 
-	if req.WorkerCount == 0 {
-		req.WorkerCount = 1
+	// Validate that each requested node exists in the cluster.
+	freshClient := proxmox.NewClient(proxmoxURL, proxmoxToken)
+	liveNodes, err := freshClient.GetNodes(r.Context())
+	if err != nil {
+		http.Error(w, "list nodes: "+err.Error(), http.StatusBadGateway)
+		return
 	}
+	liveSet := map[string]bool{}
+	for _, n := range liveNodes {
+		liveSet[n] = true
+	}
+	for _, n := range req.ProxmoxNodes {
+		if !liveSet[n] {
+			http.Error(w, fmt.Sprintf("unknown proxmox node: %q", n), http.StatusBadRequest)
+			return
+		}
+	}
+
 	if req.WorkerCPU == 0 {
 		req.WorkerCPU = 2
 	}
@@ -97,21 +120,21 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		req.DataDiskGB = 20
 	}
 	cfg := benchmark.JobConfig{
-		Name:          req.Name,
-		ClientName:    req.ClientName,
-		Mode:          benchmark.Mode(req.Mode),
-		WorkerCount:   req.WorkerCount,
-		WorkerCPU:     req.WorkerCPU,
-		WorkerRAMMB:   req.WorkerRAMMB,
-		OSDiskGB:      req.OSDiskGB,
-		DataDisks:     req.DataDisks,
-		DataDiskGB:    req.DataDiskGB,
-		ProxmoxNode:   strings.ToLower(proxmoxNode),
-		StoragePool:   storagePool,
-		CloudImageURL: "http://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2",
-		ImageStorage:  imageStorage,
-		Profiles:      req.Profiles,
-		StressConfig:  req.StressConfig,
+		Name:           req.Name,
+		ClientName:     req.ClientName,
+		Mode:           benchmark.Mode(req.Mode),
+		ProxmoxNodes:   req.ProxmoxNodes,
+		WorkersPerNode: req.WorkersPerNode,
+		WorkerCPU:      req.WorkerCPU,
+		WorkerRAMMB:    req.WorkerRAMMB,
+		OSDiskGB:       req.OSDiskGB,
+		DataDisks:      req.DataDisks,
+		DataDiskGB:     req.DataDiskGB,
+		StoragePool:    storagePool,
+		CloudImageURL:  "http://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2",
+		ImageStorage:   imageStorage,
+		Profiles:       req.Profiles,
+		StressConfig:   req.StressConfig,
 	}
 
 	job := benchmark.NewJob(cfg)
@@ -120,8 +143,6 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build fresh client from current DB settings (settings may not exist at startup)
-	freshClient := proxmox.NewClient(proxmoxURL, proxmoxToken)
 	orch := &benchmark.Orchestrator{
 		DB:          s.DB,
 		Proxmox:     freshClient,
@@ -215,9 +236,9 @@ func (s *Server) getJobResults(w http.ResponseWriter, r *http.Request) {
 	}
 
 	byProfile := make(map[string]*profileResult)
-	sumRead  := make(map[string]float64)
+	sumRead := make(map[string]float64)
 	sumWrite := make(map[string]float64)
-	sumLat   := make(map[string]float64)
+	sumLat := make(map[string]float64)
 	for _, row := range rows {
 		pr, ok := byProfile[row.ProfileName]
 		if !ok {
@@ -237,15 +258,15 @@ func (s *Server) getJobResults(w http.ResponseWriter, r *http.Request) {
 		if row.ThroughputWriteMBps > pr.MaxThroughputWrite {
 			pr.MaxThroughputWrite = row.ThroughputWriteMBps
 		}
-		sumRead[row.ProfileName]  += row.IOPSRead
+		sumRead[row.ProfileName] += row.IOPSRead
 		sumWrite[row.ProfileName] += row.IOPSWrite
-		sumLat[row.ProfileName]   += row.LatencyAvgMs
+		sumLat[row.ProfileName] += row.LatencyAvgMs
 	}
 	for name, pr := range byProfile {
 		n := float64(pr.SampleCount)
-		pr.AvgIOPSRead  = sumRead[name]  / n
+		pr.AvgIOPSRead = sumRead[name] / n
 		pr.AvgIOPSWrite = sumWrite[name] / n
-		pr.AvgLatencyMs = sumLat[name]   / n
+		pr.AvgLatencyMs = sumLat[name] / n
 	}
 
 	results := make([]profileResult, 0, len(byProfile))
