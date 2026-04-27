@@ -258,10 +258,14 @@ func computeCounts(summary []ProfileSummary) JobCounts {
 }
 
 type Generator struct {
-	db *db.DB
+	db          *db.DB
+	ProfilesDir string
+	Version     string
 }
 
-func NewGenerator(database *db.DB) *Generator { return &Generator{db: database} }
+func NewGenerator(database *db.DB, profilesDir, version string) *Generator {
+	return &Generator{db: database, ProfilesDir: profilesDir, Version: version}
+}
 
 // RenderHTML builds the HTML report. lang accepts "fr" (default) or "en".
 func (g *Generator) RenderHTML(job db.Job, results []db.Result, snaps []db.ProxmoxSnapshot, lang string) ([]byte, error) {

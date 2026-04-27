@@ -65,7 +65,7 @@ func main() {
 
 	go orch.RecoverOrphanedJobs(context.Background())
 
-	reporter := report.NewGenerator(database)
+	reporter := report.NewGenerator(database, profilesDir, Version)
 
 	srv := &api.Server{
 		DB:           database,
