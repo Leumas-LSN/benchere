@@ -113,6 +113,7 @@
         <div>
           <label class="label">{{ t('onboarding.clusterStep.node') }}</label>
           <input v-model="form.proxmox_node" type="text" placeholder="pve-01" class="input" />
+          <p class="helper">{{ t('onboarding.clusterStep.nodeHint') }}</p>
         </div>
         <div>
           <label class="label">{{ t('onboarding.clusterStep.clusterName') }}</label>
