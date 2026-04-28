@@ -15,7 +15,7 @@ describe('_handleEvent — elbencho_metric', () => {
       payload: {
         iops_read: 42000, iops_write: 1000,
         throughput_read_mbps: 165, throughput_write_mbps: 40,
-        latency_avg_ms: 0.9, latency_p99_ms: 2.1,
+        latency_avg_ms: 0.9,
         profile_name: '4k_70read',
       },
     })
@@ -33,7 +33,7 @@ describe('_handleEvent — elbencho_metric', () => {
       store._handleEvent({
         type: 'elbencho_metric', job_id: 'j1',
         payload: { iops_read: i, iops_write: 0, throughput_read_mbps: 0,
-                   throughput_write_mbps: 0, latency_avg_ms: 0, latency_p99_ms: 0, profile_name: '' },
+                   throughput_write_mbps: 0, latency_avg_ms: 0, profile_name: '' },
       })
     }
     expect(store.elbenchoMetrics.history.iopsRead).toHaveLength(60)
@@ -83,7 +83,7 @@ describe('reset', () => {
     store._handleEvent({
       type: 'elbencho_metric', job_id: 'j1',
       payload: { iops_read: 100, iops_write: 0, throughput_read_mbps: 1, throughput_write_mbps: 0,
-                 latency_avg_ms: 0.1, latency_p99_ms: 0.2, profile_name: 'test' },
+                 latency_avg_ms: 0.1, profile_name: 'test' },
     })
     store._handleEvent({
       type: 'proxmox_node', job_id: 'j1',

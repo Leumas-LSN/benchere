@@ -180,7 +180,6 @@ export default {
       throughputRead: 'Read throughput (MB/s)',
       throughputWrite: 'Write throughput (MB/s)',
       latencyAvg: 'Avg latency (ms)',
-      latencyP99: 'p99 latency (ms)',
     },
     workers: {
       none: 'No worker created',

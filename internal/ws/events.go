@@ -25,7 +25,6 @@ type ElbenchoMetricPayload struct {
 	ThroughputReadMBps  float64 `json:"throughput_read_mbps"`
 	ThroughputWriteMBps float64 `json:"throughput_write_mbps"`
 	LatencyAvgMs        float64 `json:"latency_avg_ms"`
-	LatencyP99Ms        float64 `json:"latency_p99_ms"`
 }
 
 type ProxmoxNodePayload struct {

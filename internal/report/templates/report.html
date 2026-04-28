@@ -338,7 +338,7 @@ tbody td.center { text-align: center; }
         <th class="right">{{.I18n.IOPSWriteMax}}</th>
         <th class="right">{{.I18n.ThroughputRead}}</th>
         <th class="right">{{.I18n.LatencyAvg}}</th>
-        <th class="right">{{.I18n.LatencyP99}}</th>
+        <th class="right">{{.I18n.LatencyMax}}</th>
         <th class="center">{{.I18n.Verdict}}</th>
       </tr>
     </thead>
@@ -350,7 +350,7 @@ tbody td.center { text-align: center; }
         <td class="right num">{{printf "%.0f" .MaxIOPSWrite}}</td>
         <td class="right num">{{printf "%.1f" .MaxThroughputRead}}</td>
         <td class="right num">{{printf "%.2f" .AvgLatencyMs}}</td>
-        <td class="right num">{{printf "%.2f" .P99LatencyMs}}</td>
+        <td class="right num">{{printf "%.2f" .MaxLatencyMs}}</td>
         <td class="center">
           {{if eq .Verdict "pass"}}<span class="pill pill-pass">{{$.I18n.Pass}}</span>
           {{else if eq .Verdict "fail"}}<span class="pill pill-fail">{{$.I18n.Fail}}</span>
