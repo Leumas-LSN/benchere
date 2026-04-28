@@ -468,6 +468,16 @@ tbody td.center { text-align: center; }
     </thead>
     <tbody>
       {{range .Profiles}}
+      {{if and (eq .ThresholdIOPSR 0) (eq .ThresholdIOPSW 0) (eq .ThresholdLatencyMs 0.0)}}
+      <tr>
+        <td class="profile-cell">{{.Name}}</td>
+        <td>{{.BlockSize}}</td>
+        <td>{{.RWRatio}}</td>
+        <td>{{.Pattern}}</td>
+        <td class="right num">{{if gt .RuntimeSec 0}}{{.RuntimeSec}}{{else}}-{{end}}</td>
+        <td class="center" colspan="3" style="color: var(--fg-muted); font-style: italic;">{{$.I18n.NoThresholds}}</td>
+      </tr>
+      {{else}}
       <tr>
         <td class="profile-cell">{{.Name}}</td>
         <td>{{.BlockSize}}</td>
@@ -478,6 +488,7 @@ tbody td.center { text-align: center; }
         <td class="right num">{{if gt .ThresholdIOPSW 0}}{{.ThresholdIOPSW}}{{else}}-{{end}}</td>
         <td class="right num">{{if gt .ThresholdLatencyMs 0.0}}{{printf "%.2f" .ThresholdLatencyMs}}{{else}}-{{end}}</td>
       </tr>
+      {{end}}
       {{end}}
     </tbody>
   </table>

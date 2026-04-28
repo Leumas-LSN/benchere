@@ -94,6 +94,7 @@ type reportI18n struct {
 	HdrThresholdIOPSR   string
 	HdrThresholdIOPSW   string
 	HdrThresholdLatency string
+	NoThresholds        string
 	HdrWorker           string
 	HdrVMID             string
 	HdrIP               string
@@ -156,6 +157,7 @@ var reportI18nFR = reportI18n{
 	HdrThresholdIOPSR:   "Seuil IOPS R",
 	HdrThresholdIOPSW:   "Seuil IOPS W",
 	HdrThresholdLatency: "Seuil latence (ms)",
+	NoThresholds:        "Aucun seuil defini",
 	HdrWorker:           "Worker",
 	HdrVMID:             "VMID",
 	HdrIP:               "IP",
@@ -218,6 +220,7 @@ var reportI18nEN = reportI18n{
 	HdrThresholdIOPSR:   "IOPS R threshold",
 	HdrThresholdIOPSW:   "IOPS W threshold",
 	HdrThresholdLatency: "Latency threshold (ms)",
+	NoThresholds:        "No thresholds defined",
 	HdrWorker:           "Worker",
 	HdrVMID:             "VMID",
 	HdrIP:               "IP",
