@@ -3,6 +3,7 @@ package benchmark
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/Leumas-LSN/benchere/internal/ansible"
 	"github.com/Leumas-LSN/benchere/internal/db"
@@ -32,6 +34,26 @@ type Orchestrator struct {
 	SSHKey      string
 	ProfilesDir string
 	OutputDir   string
+
+	// JobsDir is the per-job artifact root, conventionally
+	// /var/lib/benchere/jobs/. The orchestrator writes raw stdout/stderr,
+	// captured CSVs, ansible logs, worker sysinfo and provisioning logs to
+	// JobsDir/{jobID}/... so the debug bundle endpoint can read them later.
+	// Empty disables artifact capture entirely.
+	JobsDir string
+
+	// provLog, when non-nil, receives one line per provisioning step in
+	// addition to the WebSocket broadcast. Closed at end of RunExisting.
+	provLog *os.File
+}
+
+// jobDir returns the per-job artifact directory. Returns empty when JobsDir
+// is unset, callers must treat that as a no-op.
+func (o *Orchestrator) jobDir(jobID string) string {
+	if o.JobsDir == "" {
+		return ""
+	}
+	return filepath.Join(o.JobsDir, jobID)
 }
 
 func (o *Orchestrator) Run(ctx context.Context, cfg JobConfig) error {
@@ -81,6 +103,16 @@ func (o *Orchestrator) emitProvStep(jobID, step, detail string, progress float64
 		Progress: progress,
 		JobID:    jobID,
 	})
+	if o.provLog != nil {
+		fmt.Fprintf(o.provLog, "%s %s progress=%.2f %s\n",
+			time.Now().UTC().Format(time.RFC3339), step, progress, detail)
+	}
+}
+
+// jsonMarshalIndent is a tiny shim so RunExisting does not pull encoding/json
+// import directly via the orchestrator file (cycles already minimal here).
+func jsonMarshalIndent(v interface{}) ([]byte, error) {
+	return json.MarshalIndent(v, "", "  ")
 }
 
 func (o *Orchestrator) fail(jobID string, err error) error {
@@ -125,6 +157,31 @@ func readFile(path string) string {
 // RunExisting runs an already-persisted job (skipping job creation).
 // Used by the API handler which creates the job first to return the ID synchronously.
 func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfig) error {
+	// Set up the per-job artifact directory and persist the JobConfig as the
+	// first thing in the run. This means the debug bundle has the exact
+	// in-memory config used by the orchestrator, including fields that are
+	// not in the db.Job row (worker sizing, profiles, storage pool).
+	if jd := o.jobDir(job.ID); jd != "" {
+		if err := os.MkdirAll(jd, 0o755); err != nil {
+			log.Printf("[job %s] mkdir jobdir: %v", job.ID, err)
+		} else {
+			if data, err := jsonMarshalIndent(cfg); err == nil {
+				_ = os.WriteFile(filepath.Join(jd, "config.json"), data, 0o644)
+			}
+			provLog, err := os.OpenFile(filepath.Join(jd, "provisioning.log"),
+				os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+			if err == nil {
+				o.provLog = provLog
+				defer func() {
+					if o.provLog != nil {
+						o.provLog.Close()
+						o.provLog = nil
+					}
+				}()
+			}
+		}
+	}
+
 	o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "provisioning", Phase: "creating_vms"})
 	if err := o.DB.UpdateJobStatus(job.ID, "provisioning"); err != nil {
 		return o.fail(job.ID, err)
@@ -313,6 +370,17 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 	}
 
 	if cfg.Mode == ModeStorage || cfg.Mode == ModeMixed {
+		elbenchoArtifactDir := ""
+		if jd := o.jobDir(job.ID); jd != "" {
+			elbenchoArtifactDir = filepath.Join(jd, "elbencho")
+			if err := os.MkdirAll(elbenchoArtifactDir, 0o755); err != nil {
+				log.Printf("[job %s] mkdir elbencho dir: %v", job.ID, err)
+				elbenchoArtifactDir = ""
+			} else {
+				elbencho.CaptureVersion(ctx, elbenchoArtifactDir)
+			}
+		}
+
 		// Prefill the data disks before any benchmark profile runs. Workers
 		// are provisioned with thin Ceph RBD volumes (or sparse zvols on ZFS),
 		// so untouched extents return zero from the backend at network speed
@@ -322,7 +390,7 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 		o.emitProvStep(job.ID, "prefill_start",
 			fmt.Sprintf("Prefill des data disks (%d GB/worker) pour eviter les zero-block reads...", cfg.DataDiskGB), 1.0)
 		prefillTargets := buildTargets(cfg.DataDisks)
-		if err := elbencho.Prefill(ctx, workerIPs, prefillTargets, cfg.DataDiskGB); err != nil {
+		if err := elbencho.Prefill(ctx, workerIPs, prefillTargets, cfg.DataDiskGB, elbenchoArtifactDir); err != nil {
 			return o.fail(job.ID, fmt.Errorf("prefill: %w", err))
 		}
 		o.emitProvStep(job.ID, "prefill_done", "Prefill termine, demarrage du benchmark...", 1.0)
@@ -360,6 +428,7 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 				LiveCSVPath: liveCSV,
 				CSVPath:     finalCSV,
 				Label:       profileName,
+				OutputDir:   elbenchoArtifactDir,
 			})
 			cancelMetricCtx()
 			if err != nil {
