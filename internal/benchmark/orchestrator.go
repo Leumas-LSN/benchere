@@ -341,7 +341,11 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 	for i, ip := range workerIPs {
 		targets[i] = ansible.WorkerTarget{IP: ip}
 	}
-	if err := o.Ansible.ProvisionWorkers(ctx, targets); err != nil {
+	ansibleOutDir := ""
+	if jd := o.jobDir(job.ID); jd != "" {
+		ansibleOutDir = filepath.Join(jd, "ansible")
+	}
+	if err := o.Ansible.ProvisionWorkers(ctx, targets, ansibleOutDir); err != nil {
 		diag := ""
 		if len(workerIPs) > 0 {
 			diag = sshDiagnose(o.SSHKey, workerIPs[0])
