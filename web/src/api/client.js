@@ -38,7 +38,7 @@ export const api = {
   deleteProfile:  (id)      => request('DELETE', `/profiles/${id}`),
   updateProfile:  (id, body) => request('PUT',    `/profiles/${id}`, body),
 
-  // Report download URLs (no fetch — used as href)
+  // Report download URLs (no fetch, used as href)
   reportPdfUrl:  (id, lang) => `/api/jobs/${id}/report.pdf?lang=${lang || 'fr'}`,
   reportHtmlUrl: (id, lang) => `/api/jobs/${id}/report.html?lang=${lang || 'fr'}`,
 
@@ -47,6 +47,13 @@ export const api = {
   getVersion:     ()   => request('GET', '/version'),
   getJobResults:  (id) => request('GET', `/jobs/${id}/results`),
 
-  // CSV export URL helper (Plan D)
+  // CSV export URL helper.
   exportCsvUrl:   (id) => `/api/jobs/${id}/results.csv`,
+
+  // Debug bundle URL helper. Returns a tar.gz with the DB snapshot,
+  // scrubbed settings, journalctl, raw elbencho and ansible logs, worker
+  // sysinfo and a best-effort proxmox plus ceph snapshot. The endpoint
+  // replies 409 when the job is still in flight, so the UI button is
+  // disabled in that case.
+  debugBundleUrl: (id) => `/api/jobs/${id}/debug`,
 }

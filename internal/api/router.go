@@ -5,13 +5,13 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/Leumas-LSN/benchere/internal/benchmark"
 	"github.com/Leumas-LSN/benchere/internal/db"
 	"github.com/Leumas-LSN/benchere/internal/report"
 	"github.com/Leumas-LSN/benchere/internal/ws"
 	bweb "github.com/Leumas-LSN/benchere/web"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 type Server struct {
@@ -20,6 +20,11 @@ type Server struct {
 	Orchestrator *benchmark.Orchestrator
 	Reporter     *report.Generator
 	Version      string
+
+	// JobsDir is the per-job artifact root that the debug bundle endpoint
+	// reads from. Mirrors Orchestrator.JobsDir so the API does not need to
+	// reach into the orchestrator just for that path.
+	JobsDir string
 }
 
 func (s *Server) Router() http.Handler {
@@ -50,6 +55,7 @@ func (s *Server) Router() http.Handler {
 		r.Get("/jobs/{id}", s.getJob)
 		r.Get("/jobs/{id}/results", s.getJobResults)
 		r.Get("/jobs/{id}/results.csv", s.exportJobCSV)
+		r.Get("/jobs/{id}/debug", s.downloadDebug)
 		r.Post("/jobs/{id}/cancel", s.cancelJob)
 		r.Delete("/jobs", s.clearHistory)
 		r.Get("/jobs/{id}/workers", s.listWorkers)
@@ -63,7 +69,7 @@ func (s *Server) Router() http.Handler {
 		r.Delete("/profiles/{id}", s.deleteProfile)
 	})
 
-	// Serve Vue3 SPA — API and WS routes already matched above
+	// Serve Vue3 SPA - API and WS routes already matched above.
 	dist, err := fs.Sub(bweb.DistFS, "dist")
 	if err != nil {
 		panic("web: could not sub into dist: " + err.Error())
@@ -73,7 +79,8 @@ func (s *Server) Router() http.Handler {
 	return r
 }
 
-// spaHandler serves static files and falls back to index.html for SPA routing (HTML5 history mode).
+// spaHandler serves static files and falls back to index.html for SPA
+// routing (HTML5 history mode).
 func spaHandler(fsys fs.FS) http.Handler {
 	fileServer := http.FileServerFS(fsys)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -83,7 +90,7 @@ func spaHandler(fsys fs.FS) http.Handler {
 		}
 		f, err := fsys.Open(path)
 		if err != nil {
-			// Unknown path — serve index.html so Vue Router handles it
+			// Unknown path: serve index.html so Vue Router handles it.
 			http.ServeFileFS(w, r, fsys, "index.html")
 			return
 		}

@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/Leumas-LSN/benchere/internal/ansible"
 	"github.com/Leumas-LSN/benchere/internal/api"
 	"github.com/Leumas-LSN/benchere/internal/benchmark"
 	"github.com/Leumas-LSN/benchere/internal/config"
 	"github.com/Leumas-LSN/benchere/internal/db"
+	debugpkg "github.com/Leumas-LSN/benchere/internal/debug"
 	"github.com/Leumas-LSN/benchere/internal/proxmox"
 	"github.com/Leumas-LSN/benchere/internal/report"
 	"github.com/Leumas-LSN/benchere/internal/stress"
@@ -31,23 +33,30 @@ func main() {
 	}
 	defer database.Close()
 
-	sshKeyPath  := envOr("BENCHERE_SSH_KEY", "/opt/benchere/id_rsa")
+	sshKeyPath := envOr("BENCHERE_SSH_KEY", "/opt/benchere/id_rsa")
 	log.Printf("[startup] sshKeyPath=%q", sshKeyPath)
 	playbookDir := envOr("BENCHERE_PLAYBOOK_DIR", "/opt/benchere/ansible/playbooks")
 	elbenchoDeb := envOr("BENCHERE_ELBENCHO_DEB", "/opt/benchere/assets/elbencho_amd64.deb")
 	profilesDir := envOr("BENCHERE_PROFILES_DIR", "/opt/benchere/profiles")
-	outputDir   := envOr("BENCHERE_OUTPUT_DIR", "/opt/benchere/output")
+	outputDir := envOr("BENCHERE_OUTPUT_DIR", "/opt/benchere/output")
+	jobsDir := envOr("BENCHERE_JOBS_DIR", "/var/lib/benchere/jobs")
 
 	os.MkdirAll(profilesDir, 0755)
 	os.MkdirAll(outputDir, 0755)
+	os.MkdirAll(jobsDir, 0755)
 	os.MkdirAll(filepath.Dir(cfg.DBPath), 0755)
 
-	proxmoxURL, _   := database.GetSetting("proxmox_url")
+	// Retain per-job artifact dirs for 7 days. One log line, fire and forget.
+	if cleaned := debugpkg.CleanOldJobDirs(jobsDir, 7*24*time.Hour); cleaned > 0 {
+		log.Printf("[startup] cleaned %d job dirs older than 7d in %s", cleaned, jobsDir)
+	}
+
+	proxmoxURL, _ := database.GetSetting("proxmox_url")
 	proxmoxToken, _ := database.GetSetting("proxmox_token")
 
-	pxClient      := proxmox.NewClient(proxmoxURL, proxmoxToken)
+	pxClient := proxmox.NewClient(proxmoxURL, proxmoxToken)
 	ansibleRunner := ansible.NewRunner(playbookDir, sshKeyPath, elbenchoDeb)
-	stressRunner  := stress.NewRunner(sshKeyPath)
+	stressRunner := stress.NewRunner(sshKeyPath)
 
 	hub := ws.NewHub()
 	go hub.Run()
@@ -61,6 +70,7 @@ func main() {
 		SSHKey:      sshKeyPath,
 		ProfilesDir: profilesDir,
 		OutputDir:   outputDir,
+		JobsDir:     jobsDir,
 	}
 
 	go orch.RecoverOrphanedJobs(context.Background())
@@ -73,6 +83,7 @@ func main() {
 		Orchestrator: orch,
 		Reporter:     reporter,
 		Version:      Version,
+		JobsDir:      jobsDir,
 	}
 
 	log.Printf("benchere %s listening on :%s", Version, cfg.Port)
