@@ -313,6 +313,20 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 	}
 
 	if cfg.Mode == ModeStorage || cfg.Mode == ModeMixed {
+		// Prefill the data disks before any benchmark profile runs. Workers
+		// are provisioned with thin Ceph RBD volumes (or sparse zvols on ZFS),
+		// so untouched extents return zero from the backend at network speed
+		// rather than from real storage. Read profiles measured ~100 GB/s and
+		// sub-millisecond latency before this step was wired in.
+		o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "running", Phase: "prefill"})
+		o.emitProvStep(job.ID, "prefill_start",
+			fmt.Sprintf("Prefill des data disks (%d GB/worker) pour eviter les zero-block reads...", cfg.DataDiskGB), 1.0)
+		prefillTargets := buildTargets(cfg.DataDisks)
+		if err := elbencho.Prefill(ctx, workerIPs, prefillTargets, cfg.DataDiskGB); err != nil {
+			return o.fail(job.ID, fmt.Errorf("prefill: %w", err))
+		}
+		o.emitProvStep(job.ID, "prefill_done", "Prefill termine, demarrage du benchmark...", 1.0)
+
 		for _, profileName := range cfg.Profiles {
 			o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "running", Phase: profileName})
 
