@@ -32,6 +32,23 @@
             <Icon name="download" :size="14" /> PDF
           </a>
         </template>
+        <a
+          v-if="canDownloadDebug"
+          :href="api.debugBundleUrl(jobId)"
+          download
+          class="btn-secondary btn-sm"
+          :title="t('job.debug.tooltip')"
+        >
+          <Icon name="download" :size="14" /> {{ t('job.debug.button') }}
+        </a>
+        <button
+          v-else
+          class="btn-secondary btn-sm opacity-50 cursor-not-allowed"
+          disabled
+          :title="t('job.debug.disabledTooltip')"
+        >
+          <Icon name="download" :size="14" /> {{ t('job.debug.button') }}
+        </button>
       </template>
     </PageHeader>
 
@@ -157,7 +174,7 @@ import StatCard    from '../components/StatCard.vue'
 import EmptyState  from '../components/EmptyState.vue'
 import Icon        from '../components/Icon.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const route   = useRoute()
 const jobId   = route.params.id
@@ -166,6 +183,11 @@ const results = ref([])
 const workers = ref([])
 const profiles = ref([])
 const error   = ref('')
+
+const canDownloadDebug = computed(() => {
+  const s = job.value?.status
+  return s === 'done' || s === 'failed' || s === 'cancelled'
+})
 
 const duration = computed(() => {
   if (!job.value?.finished_at || !job.value?.created_at) return '—'

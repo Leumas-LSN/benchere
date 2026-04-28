@@ -191,6 +191,13 @@ export default {
     wsInactive: 'WS inactive',
     cancel: 'Cancel job',
   },
+  job: {
+    debug: {
+      button: 'Download debug bundle',
+      tooltip: 'Tar.gz with DB snapshot, scrubbed settings, journalctl, raw elbencho and ansible logs, worker sysinfo, Proxmox and Ceph status. Used by support to diagnose unexpected results.',
+      disabledTooltip: 'Available once the job has finished (done, failed or cancelled).',
+    },
+  },
   jobDetail: {
     title: 'Results',
     failedReason: 'The job failed',

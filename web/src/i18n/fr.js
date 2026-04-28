@@ -191,6 +191,13 @@ export default {
     wsInactive: 'WS inactif',
     cancel: 'Annuler le job',
   },
+  job: {
+    debug: {
+      button: 'Telecharger debug package',
+      tooltip: 'Archive tar.gz contenant le snapshot DB, les settings scrubbes, les logs journalctl, la sortie brute elbencho et ansible, le sysinfo des workers, le statut Proxmox et Ceph. Utilise par le support pour diagnostiquer un resultat anormal.',
+      disabledTooltip: 'Disponible une fois le job termine (done, failed ou cancelled).',
+    },
+  },
   jobDetail: {
     title: 'Résultats',
     failedReason: "Le job a échoué",
