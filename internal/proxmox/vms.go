@@ -87,8 +87,14 @@ func (c *Client) CreateVM(ctx context.Context, p VMCreateParams) (int, error) {
 	}
 	form.Set("scsihw", "virtio-scsi-pci")
 	form.Set("boot", "order=scsi0")
+	// Data disks must skip every cache layer between elbencho and the
+	// underlying storage. Without cache=none, librbd keeps a per-QEMU read
+	// cache on the hypervisor (rbd_cache=true is the upstream default) and
+	// O_DIRECT inside the guest does not bypass it. aio=native pairs with
+	// cache=none to use kernel native AIO instead of threadpool emulation.
 	for i := 0; i < p.DataDisks; i++ {
-		form.Set(fmt.Sprintf("scsi%d", i+1), fmt.Sprintf("%s:%d", p.StoragePool, p.DataDiskGB))
+		form.Set(fmt.Sprintf("scsi%d", i+1),
+			fmt.Sprintf("%s:%d,cache=none,aio=native", p.StoragePool, p.DataDiskGB))
 	}
 	resp, err := c.do(ctx, "POST", fmt.Sprintf("/nodes/%s/qemu", p.Node), strings.NewReader(form.Encode()))
 	if err != nil {
