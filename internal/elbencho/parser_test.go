@@ -9,9 +9,15 @@ import (
 	"github.com/Leumas-LSN/benchere/internal/elbencho"
 )
 
-const sampleCSV = `ISO date,UNIX time,label,num workers,read (MiB/s),write (MiB/s),read (IOPS),write (IOPS),read lat (us) avg,write lat (us) avg,read lat (us) 99.0%,write lat (us) 99.0%
-2026-04-25T10:00:01,1745575201,4k_100read_100random,4,165.3,0,42355,0,94,0,980,0
-2026-04-25T10:00:02,1745575202,4k_100read_100random,4,171.2,0,43827,0,91,0,950,0
+// sampleCSV mirrors the real elbencho 3.x --livecsv schema:
+// ISO Date,Label,Phase,RuntimeMS,Rank,MixType,Done%,DoneBytes,MiB/s,IOPS,
+// Entries,Entries/s,Lat Ent us,Lat IO us,Active,CPU,Service
+//
+// Only "Total" rows carry aggregated metrics; the parser must skip per-rank
+// rows. There is no p99 column in --livecsv.
+const sampleCSV = `ISO Date,Label,Phase,RuntimeMS,Rank,MixType,Done%,DoneBytes,MiB/s,IOPS,Entries,Entries/s,Lat Ent us,Lat IO us,Active,CPU,Service
+2026-04-25T10:00:01,4k_100read_100random,READ,1000,Total,Read,1,1024,165.3,42355,0,0,0,94,1,12,svc1
+2026-04-25T10:00:02,4k_100read_100random,READ,2000,Total,Read,2,2048,171.2,43827,0,0,0,91,1,12,svc1
 `
 
 func TestTailCSV(t *testing.T) {

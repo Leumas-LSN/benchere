@@ -126,7 +126,6 @@
         label="Latence avg"
         :value="(wsStore.elbenchoMetrics.latencyAvgMs || 0).toFixed(2)"
         unit="ms"
-        :hint="`p99 : ${(wsStore.elbenchoMetrics.latencyP99Ms || 0).toFixed(2)} ms`"
         :tone="wsStore.elbenchoMetrics.latencyAvgMs > 5 ? 'danger' : 'success'"
       />
     </section>

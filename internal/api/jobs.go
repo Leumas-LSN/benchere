@@ -307,7 +307,7 @@ func (s *Server) exportJobCSV(w http.ResponseWriter, r *http.Request) {
 		"timestamp", "profile_name",
 		"iops_read", "iops_write",
 		"throughput_read_mbps", "throughput_write_mbps",
-		"latency_avg_ms", "latency_p99_ms",
+		"latency_avg_ms",
 	})
 	for _, row := range rows {
 		_ = cw.Write([]string{
@@ -318,7 +318,6 @@ func (s *Server) exportJobCSV(w http.ResponseWriter, r *http.Request) {
 			fmt.Sprintf("%.2f", row.ThroughputReadMBps),
 			fmt.Sprintf("%.2f", row.ThroughputWriteMBps),
 			fmt.Sprintf("%.4f", row.LatencyAvgMs),
-			fmt.Sprintf("%.4f", row.LatencyP99Ms),
 		})
 	}
 	cw.Flush()

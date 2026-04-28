@@ -4,8 +4,8 @@ import "testing"
 
 func TestComputeKPIs_Storage(t *testing.T) {
 	summary := []ProfileSummary{
-		{ProfileName: "p1", MaxIOPSRead: 30000, MaxIOPSWrite: 15000, MaxThroughputRead: 200, P99LatencyMs: 1.2},
-		{ProfileName: "p2", MaxIOPSRead: 50000, MaxIOPSWrite: 20000, MaxThroughputRead: 300, P99LatencyMs: 0.8},
+		{ProfileName: "p1", MaxIOPSRead: 30000, MaxIOPSWrite: 15000, MaxThroughputRead: 200, MaxLatencyMs: 1.2},
+		{ProfileName: "p2", MaxIOPSRead: 50000, MaxIOPSWrite: 20000, MaxThroughputRead: 300, MaxLatencyMs: 0.8},
 	}
 	kpis := computeKPIs("storage", summary, nil)
 	if len(kpis) != 4 {

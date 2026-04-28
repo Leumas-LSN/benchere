@@ -53,7 +53,7 @@ func (o *Orchestrator) persistMetrics(ctx context.Context, jobID, profileName st
 				ID: uuid.NewString(), JobID: jobID, ProfileName: profileName,
 				Timestamp: m.Timestamp, IOPSRead: m.IOPSRead, IOPSWrite: m.IOPSWrite,
 				ThroughputReadMBps: m.ThroughputReadMBps, ThroughputWriteMBps: m.ThroughputWriteMBps,
-				LatencyAvgMs: m.LatencyAvgMs, LatencyP99Ms: m.LatencyP99Ms,
+				LatencyAvgMs: m.LatencyAvgMs,
 			}
 			_ = o.DB.InsertResult(r)
 			o.emit(jobID, ws.EventElbenchoMetric, ws.ElbenchoMetricPayload{
@@ -63,7 +63,6 @@ func (o *Orchestrator) persistMetrics(ctx context.Context, jobID, profileName st
 				ThroughputReadMBps:  m.ThroughputReadMBps,
 				ThroughputWriteMBps: m.ThroughputWriteMBps,
 				LatencyAvgMs:        m.LatencyAvgMs,
-				LatencyP99Ms:        m.LatencyP99Ms,
 			})
 		case <-ctx.Done():
 			return

@@ -10,7 +10,7 @@ export const useWsStore = defineStore('ws', () => {
   const elbenchoMetrics = reactive({
     iopsRead: 0, iopsWrite: 0,
     throughputReadMbps: 0, throughputWriteMbps: 0,
-    latencyAvgMs: 0, latencyP99Ms: 0,
+    latencyAvgMs: 0,
     profileName: '',
     history: { iopsRead: [], iopsWrite: [], latency: [], labels: [] },
   })
@@ -48,7 +48,6 @@ export const useWsStore = defineStore('ws', () => {
         elbenchoMetrics.throughputReadMbps  = p.throughput_read_mbps
         elbenchoMetrics.throughputWriteMbps = p.throughput_write_mbps
         elbenchoMetrics.latencyAvgMs        = p.latency_avg_ms
-        elbenchoMetrics.latencyP99Ms        = p.latency_p99_ms
         elbenchoMetrics.profileName         = p.profile_name
         const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
         elbenchoMetrics.history.iopsRead.push(p.iops_read)
@@ -103,7 +102,6 @@ export const useWsStore = defineStore('ws', () => {
     elbenchoMetrics.throughputReadMbps = 0
     elbenchoMetrics.throughputWriteMbps = 0
     elbenchoMetrics.latencyAvgMs = 0
-    elbenchoMetrics.latencyP99Ms = 0
     elbenchoMetrics.profileName = ''
     elbenchoMetrics.history.iopsRead.splice(0)
     elbenchoMetrics.history.iopsWrite.splice(0)

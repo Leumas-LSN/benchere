@@ -22,7 +22,7 @@ type ProfileSummary struct {
 	MaxIOPSWrite      float64
 	MaxThroughputRead float64
 	AvgLatencyMs      float64
-	P99LatencyMs      float64
+	MaxLatencyMs      float64
 	Verdict           string
 }
 
@@ -55,7 +55,7 @@ type reportI18n struct {
 	IOPSWriteMax    string
 	ThroughputRead  string
 	LatencyAvg      string
-	LatencyP99      string
+	LatencyMax      string
 	Verdict         string
 	Pass            string
 	Fail            string
@@ -94,6 +94,7 @@ type reportI18n struct {
 	HdrThresholdIOPSR   string
 	HdrThresholdIOPSW   string
 	HdrThresholdLatency string
+	NoThresholds        string
 	HdrWorker           string
 	HdrVMID             string
 	HdrIP               string
@@ -118,7 +119,7 @@ var reportI18nFR = reportI18n{
 	IOPSWriteMax:    "IOPS Write max",
 	ThroughputRead:  "Débit Read (MB/s)",
 	LatencyAvg:      "Latence avg (ms)",
-	LatencyP99:      "Latence p99 (ms)",
+	LatencyMax:      "Latence max (ms)",
 	Verdict:         "Verdict",
 	Pass:            "Pass",
 	Fail:            "Fail",
@@ -156,6 +157,7 @@ var reportI18nFR = reportI18n{
 	HdrThresholdIOPSR:   "Seuil IOPS R",
 	HdrThresholdIOPSW:   "Seuil IOPS W",
 	HdrThresholdLatency: "Seuil latence (ms)",
+	NoThresholds:        "Aucun seuil defini",
 	HdrWorker:           "Worker",
 	HdrVMID:             "VMID",
 	HdrIP:               "IP",
@@ -180,7 +182,7 @@ var reportI18nEN = reportI18n{
 	IOPSWriteMax:    "Max write IOPS",
 	ThroughputRead:  "Read throughput (MB/s)",
 	LatencyAvg:      "Avg latency (ms)",
-	LatencyP99:      "p99 latency (ms)",
+	LatencyMax:      "Max latency (ms)",
 	Verdict:         "Verdict",
 	Pass:            "Pass",
 	Fail:            "Fail",
@@ -218,6 +220,7 @@ var reportI18nEN = reportI18n{
 	HdrThresholdIOPSR:   "IOPS R threshold",
 	HdrThresholdIOPSW:   "IOPS W threshold",
 	HdrThresholdLatency: "Latency threshold (ms)",
+	NoThresholds:        "No thresholds defined",
 	HdrWorker:           "Worker",
 	HdrVMID:             "VMID",
 	HdrIP:               "IP",
@@ -313,7 +316,7 @@ func (g *Generator) buildReportData(job db.Job, results []db.Result, snaps []db.
 	}
 	for profile, rs := range byProfile {
 		s := ProfileSummary{ProfileName: profile}
-		var sumLat, sumP99 float64
+		var sumLat float64
 		for _, r := range rs {
 			if r.IOPSRead > s.MaxIOPSRead {
 				s.MaxIOPSRead = r.IOPSRead
@@ -325,11 +328,12 @@ func (g *Generator) buildReportData(job db.Job, results []db.Result, snaps []db.
 				s.MaxThroughputRead = r.ThroughputReadMBps
 			}
 			sumLat += r.LatencyAvgMs
-			sumP99 += r.LatencyP99Ms
+			if r.LatencyAvgMs > s.MaxLatencyMs {
+				s.MaxLatencyMs = r.LatencyAvgMs
+			}
 		}
 		if len(rs) > 0 {
 			s.AvgLatencyMs = sumLat / float64(len(rs))
-			s.P99LatencyMs = sumP99 / float64(len(rs))
 		}
 
 		if g.db != nil {

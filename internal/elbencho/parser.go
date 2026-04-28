@@ -19,7 +19,6 @@ type Metric struct {
 	ThroughputReadMBps  float64
 	ThroughputWriteMBps float64
 	LatencyAvgMs        float64
-	LatencyP99Ms        float64
 }
 
 // TailCSV reads existing lines then blocks waiting for new ones. Closes out when ctx is done.

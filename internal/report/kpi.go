@@ -11,9 +11,13 @@ type KPI struct {
 }
 
 // computeKPIs returns 4 KPI tiles tailored to the job mode.
-// "storage" -> IOPS R / IOPS W / Throughput / Latency p99
+// "storage" -> IOPS R / IOPS W / Throughput / Latency max
 // "cpu"     -> CPU max / CPU avg / NodeChargeMax / StressDuration
 // "mixed"   -> hybrid 4-tile mix
+//
+// Latency max is the max of per-sample averages across the run. elbencho
+// live CSV does not emit p99 percentiles; capturing them would require
+// parsing stdout from --latpercent, not currently wired.
 func computeKPIs(mode string, summary []ProfileSummary, nodes []NodeSummaryRow) []KPI {
 	switch mode {
 	case "cpu":
@@ -26,8 +30,8 @@ func computeKPIs(mode string, summary []ProfileSummary, nodes []NodeSummaryRow) 
 }
 
 func storageKPIs(summary []ProfileSummary) []KPI {
-	maxR, maxW, maxThru, maxP99 := 0.0, 0.0, 0.0, 0.0
-	whoR, whoW, whoT, whoP := "", "", "", ""
+	maxR, maxW, maxThru, maxLat := 0.0, 0.0, 0.0, 0.0
+	whoR, whoW, whoT, whoL := "", "", "", ""
 	for _, s := range summary {
 		if s.MaxIOPSRead > maxR {
 			maxR = s.MaxIOPSRead
@@ -41,16 +45,16 @@ func storageKPIs(summary []ProfileSummary) []KPI {
 			maxThru = s.MaxThroughputRead
 			whoT = s.ProfileName
 		}
-		if s.P99LatencyMs > maxP99 {
-			maxP99 = s.P99LatencyMs
-			whoP = s.ProfileName
+		if s.MaxLatencyMs > maxLat {
+			maxLat = s.MaxLatencyMs
+			whoL = s.ProfileName
 		}
 	}
 	return []KPI{
 		{Label: "IOPS READ MAX", Value: formatInt(maxR), Unit: "IOPS", Sub: profileSub(whoR)},
 		{Label: "IOPS WRITE MAX", Value: formatInt(maxW), Unit: "IOPS", Sub: profileSub(whoW)},
 		{Label: "DEBIT MAX", Value: formatFloat(maxThru, 0), Unit: "MB/s", Sub: profileSub(whoT)},
-		{Label: "LATENCE P99 MAX", Value: formatFloat(maxP99, 2), Unit: "ms", Sub: profileSub(whoP)},
+		{Label: "LATENCE MAX", Value: formatFloat(maxLat, 2), Unit: "ms", Sub: profileSub(whoL)},
 	}
 }
 

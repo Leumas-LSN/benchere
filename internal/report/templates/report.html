@@ -338,7 +338,7 @@ tbody td.center { text-align: center; }
         <th class="right">{{.I18n.IOPSWriteMax}}</th>
         <th class="right">{{.I18n.ThroughputRead}}</th>
         <th class="right">{{.I18n.LatencyAvg}}</th>
-        <th class="right">{{.I18n.LatencyP99}}</th>
+        <th class="right">{{.I18n.LatencyMax}}</th>
         <th class="center">{{.I18n.Verdict}}</th>
       </tr>
     </thead>
@@ -350,7 +350,7 @@ tbody td.center { text-align: center; }
         <td class="right num">{{printf "%.0f" .MaxIOPSWrite}}</td>
         <td class="right num">{{printf "%.1f" .MaxThroughputRead}}</td>
         <td class="right num">{{printf "%.2f" .AvgLatencyMs}}</td>
-        <td class="right num">{{printf "%.2f" .P99LatencyMs}}</td>
+        <td class="right num">{{printf "%.2f" .MaxLatencyMs}}</td>
         <td class="center">
           {{if eq .Verdict "pass"}}<span class="pill pill-pass">{{$.I18n.Pass}}</span>
           {{else if eq .Verdict "fail"}}<span class="pill pill-fail">{{$.I18n.Fail}}</span>
@@ -468,6 +468,16 @@ tbody td.center { text-align: center; }
     </thead>
     <tbody>
       {{range .Profiles}}
+      {{if and (eq .ThresholdIOPSR 0) (eq .ThresholdIOPSW 0) (eq .ThresholdLatencyMs 0.0)}}
+      <tr>
+        <td class="profile-cell">{{.Name}}</td>
+        <td>{{.BlockSize}}</td>
+        <td>{{.RWRatio}}</td>
+        <td>{{.Pattern}}</td>
+        <td class="right num">{{if gt .RuntimeSec 0}}{{.RuntimeSec}}{{else}}-{{end}}</td>
+        <td class="center" colspan="3" style="color: var(--fg-muted); font-style: italic;">{{$.I18n.NoThresholds}}</td>
+      </tr>
+      {{else}}
       <tr>
         <td class="profile-cell">{{.Name}}</td>
         <td>{{.BlockSize}}</td>
@@ -478,6 +488,7 @@ tbody td.center { text-align: center; }
         <td class="right num">{{if gt .ThresholdIOPSW 0}}{{.ThresholdIOPSW}}{{else}}-{{end}}</td>
         <td class="right num">{{if gt .ThresholdLatencyMs 0.0}}{{printf "%.2f" .ThresholdLatencyMs}}{{else}}-{{end}}</td>
       </tr>
+      {{end}}
       {{end}}
     </tbody>
   </table>

@@ -59,3 +59,46 @@ rand=1
 		t.Errorf("missing profile should be name-only, got %+v", out[1])
 	}
 }
+
+func TestApplyElbenchoConfig_RWRatio(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  string
+		want string
+	}{
+		{
+			name: "read only with default rwmixpct=0",
+			cfg:  "read=1\nrwmixpct=0\n",
+			want: "100% R",
+		},
+		{
+			name: "write only with rwmixpct=0",
+			cfg:  "write=1\nrwmixpct=0\n",
+			want: "100% W",
+		},
+		{
+			name: "read only without rwmixpct",
+			cfg:  "read=1\n",
+			want: "100% R",
+		},
+		{
+			name: "mixed write phase 70/30",
+			cfg:  "write=1\nrwmixpct=70\n",
+			want: "70/30 R/W",
+		},
+		{
+			name: "write phase rwmixpct=100",
+			cfg:  "write=1\nrwmixpct=100\n",
+			want: "100% R",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pc := ProfileConfig{}
+			applyElbenchoConfig(&pc, tc.cfg)
+			if pc.RWRatio != tc.want {
+				t.Errorf("got %q, want %q", pc.RWRatio, tc.want)
+			}
+		})
+	}
+}
