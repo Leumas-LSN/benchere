@@ -445,6 +445,22 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 		_ = o.Stress.StopOnWorkers(ctx, workerIPs)
 	}
 
+	// Capture per-worker sysinfo and Proxmox config before the deferred
+	// cleanup destroys the VMs. Bounded by a 2 minute deadline so a single
+	// hung worker cannot block the job from finishing. Best-effort: any
+	// failure is logged to {jobDir}/errors.log and the job still ends ok.
+	// Re-read worker rows from DB so we get the IPs persisted by the
+	// provisioning goroutine.
+	{
+		artifactsCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		freshWorkers, err := o.DB.ListWorkersByJob(job.ID)
+		if err != nil || len(freshWorkers) == 0 {
+			freshWorkers = createdWorkers
+		}
+		o.CollectWorkerArtifacts(artifactsCtx, job.ID, freshWorkers)
+		cancel()
+	}
+
 	_ = o.DB.FinishJob(job.ID, "done")
 	o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "done"})
 	return nil
