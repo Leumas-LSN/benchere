@@ -104,23 +104,25 @@ func applyElbenchoConfig(pc *ProfileConfig, configText string) {
 			pc.RuntimeSec = n
 		}
 	}
-	// elbencho ratio: "rwmixpct" is the read percent, or rand=1 + write phase.
-	// We do best-effort: rwmixpct -> ratio; fall back to "100% R" / "100% W"
-	// based on phase flags.
+	// elbencho R/W ratio. "read" / "write" select the phase; "rwmixpct" only
+	// matters in a write phase as the % of read blocks interleaved. A read-only
+	// profile may still carry rwmixpct=0 as default, which must not be reported
+	// as "100% W".
+	hasRead := kv["read"] == "1" || kv["read"] == "true"
+	hasWrite := kv["write"] == "1" || kv["write"] == "true"
+	mix, hasMix := -1, false
 	if v, ok := kv["rwmixpct"]; ok {
 		if n, err := strconv.Atoi(v); err == nil {
-			pc.RWRatio = ratioLabel(n)
+			mix, hasMix = n, true
 		}
-	} else {
-		// Look for write/read phase flags
-		_, hasW := kv["w"]
-		_, hasR := kv["r"]
-		switch {
-		case hasW && !hasR:
-			pc.RWRatio = "100% W"
-		case hasR && !hasW:
-			pc.RWRatio = "100% R"
-		}
+	}
+	switch {
+	case hasWrite && hasMix:
+		pc.RWRatio = ratioLabel(mix)
+	case hasRead && !hasWrite:
+		pc.RWRatio = "100% R"
+	case hasWrite && !hasRead:
+		pc.RWRatio = "100% W"
 	}
 	if v, ok := kv["rand"]; ok && v == "1" {
 		pc.Pattern = "random"
