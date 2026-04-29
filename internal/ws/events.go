@@ -5,11 +5,11 @@ import "encoding/json"
 type EventType string
 
 const (
-	EventElbenchoMetric    EventType = "elbencho_metric"
-	EventProxmoxNode       EventType = "proxmox_node"
-	EventProxmoxVM         EventType = "proxmox_vm"
-	EventJobStatus         EventType = "job_status"
-	EventProvisioningStep  EventType = "provisioning_step"
+	EventElbenchoMetric   EventType = "elbencho_metric"
+	EventProxmoxNode      EventType = "proxmox_node"
+	EventProxmoxVM        EventType = "proxmox_vm"
+	EventJobStatus        EventType = "job_status"
+	EventProvisioningStep EventType = "provisioning_step"
 )
 
 type Event struct {
@@ -44,9 +44,14 @@ type ProxmoxVMPayload struct {
 	DiskWriteBps float64 `json:"disk_write_bps"`
 }
 
+// JobStatusPayload reports a job state transition. RuntimeSeconds carries the
+// expected duration of the current phase when known (e.g. a profile bench
+// runtime parsed from the profile config), and zero otherwise. Used by the
+// frontend to drive a per-phase progress bar with an ETA.
 type JobStatusPayload struct {
-	Status string `json:"status"`
-	Phase  string `json:"phase"`
+	Status         string `json:"status"`
+	Phase          string `json:"phase,omitempty"`
+	RuntimeSeconds int    `json:"runtime_seconds,omitempty"`
 }
 
 // ProvisioningStepPayload describes a provisioning step event.
