@@ -1,32 +1,31 @@
 <template>
-  <div class="page">
-    <PageHeader>
-      <template #title>
-        <span class="flex items-center gap-3">
+  <div class="page-compact space-y-2.5">
+    <!-- Identity row: title + status + meta + actions on a single line -->
+    <header class="flex items-center justify-between gap-4 flex-wrap">
+      <div class="flex items-center gap-3 min-w-0">
+        <h1 class="text-lg md:text-xl font-semibold tracking-tight fg-primary truncate">
           {{ job?.name ?? '...' }}
-          <StatusBadge v-if="job?.status" :status="job.status" />
-        </span>
-      </template>
-      <template #description>
-        <span v-if="job">
-          {{ job.client_name }}
+        </h1>
+        <StatusBadge v-if="job?.status" :status="job.status" />
+        <span v-if="job" class="text-sm fg-secondary truncate hidden sm:flex items-center gap-1.5">
           <span class="fg-faint">·</span>
-          mode {{ job.mode }}
-          <span v-if="wsStore.jobStatus.phase">
+          <span class="truncate">{{ job.client_name }}</span>
+          <span class="fg-faint">·</span>
+          <span class="font-mono text-xs">mode {{ job.mode }}</span>
+          <span v-if="wsStore.jobStatus.phase" class="hidden md:inline-flex items-center gap-1.5">
             <span class="fg-faint">·</span>
-            phase <span class="font-mono">{{ wsStore.jobStatus.phase }}</span>
-          </span>
-          <span class="fg-faint">·</span>
-          <span class="inline-flex items-center gap-1.5">
-            <span
-              class="w-1.5 h-1.5 rounded-full"
-              :class="wsStore.connected ? 'bg-emerald-500 animate-pulse-dot' : 'bg-ink-400'"
-            ></span>
-            {{ wsStore.connected ? t('dashboard.wsLive') : t('dashboard.wsInactive') }}
+            <span class="font-mono text-xs">{{ wsStore.jobStatus.phase }}</span>
           </span>
         </span>
-      </template>
-      <template #actions>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center gap-1.5 text-xs fg-secondary">
+          <span
+            class="w-1.5 h-1.5 rounded-full"
+            :class="wsStore.connected ? 'bg-emerald-500 animate-pulse-dot' : 'bg-ink-400'"
+          ></span>
+          {{ wsStore.connected ? t('dashboard.wsLive') : t('dashboard.wsInactive') }}
+        </span>
         <RouterLink to="/history" class="btn-secondary btn-sm">
           <Icon name="history" :size="14" />
           Historique
@@ -37,7 +36,7 @@
           class="btn-secondary btn-sm"
         >
           <Icon name="file_text" :size="14" />
-          Résultats
+          Resultats
         </RouterLink>
         <button
           v-if="isRunning"
@@ -49,95 +48,60 @@
           <Icon v-else name="stop" :size="14" />
           Stop
         </button>
-      </template>
-    </PageHeader>
+      </div>
+    </header>
 
-    <!-- Failure panel -->
-    <div v-if="job?.status === 'failed'" class="alert-error mb-6">
-      <Icon name="x_circle" :size="18" class="mt-0.5 shrink-0" />
+    <!-- Failure panel (compact) -->
+    <div v-if="job?.status === 'failed'" class="alert-error">
+      <Icon name="x_circle" :size="16" class="mt-0.5 shrink-0" />
       <div class="flex-1 min-w-0">
-        <p class="font-semibold">Le job a échoué</p>
-        <p v-if="job?.error_message" class="font-mono text-xs mt-1 break-all opacity-90">
+        <p class="font-semibold text-sm">Le job a echoue</p>
+        <p v-if="job?.error_message" class="font-mono text-xs mt-0.5 break-all opacity-90">
           {{ job.error_message }}
         </p>
       </div>
     </div>
 
-    <!-- Provisioning timeline -->
-    <section
-      v-if="job && job.status === 'provisioning'"
-      class="card mb-6 space-y-4 animate-fade-in"
-    >
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2.5">
-          <span class="card-title">{{ t("newJob.submitting") }}</span>
-        </div>
-        <span class="num text-sm fg-secondary">{{ Math.round(wsStore.provProgress * 100) }}%</span>
+    <!-- Phase progress strip: provisioning | prefill | profile -->
+    <PhaseProgress
+      v-if="showPhaseStrip"
+      :prefill-estimated-seconds="prefillEstimatedSeconds"
+    />
+
+    <!-- KPI tiles row: 4 compact tiles, single row, dense -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+      <div class="kpi-tile">
+        <span class="kpi-label">IOPS Read</span>
+        <span class="kpi-value text-brand-600 dark:text-brand-400">{{ formatIops(wsStore.elbenchoMetrics.iopsRead) }}</span>
       </div>
-      <ProgressBar :value="wsStore.provProgress * 100" tone="brand" />
-      <ol class="space-y-2.5 mt-2">
-        <li
-          v-for="s in wsStore.provSteps"
-          :key="s.step"
-          class="flex items-center gap-3 text-sm"
-        >
-          <span class="w-5 h-5 rounded-full flex items-center justify-center bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 shrink-0">
-            <Icon name="check" :size="12" stroke-width="3" />
-          </span>
-          <span class="fg-primary">{{ s.detail }}</span>
-        </li>
-        <li
-          v-if="wsStore.provProgress < 1 && wsStore.provSteps.length > 0"
-          class="flex items-center gap-3 text-sm"
-        >
-          <span class="w-5 h-5 rounded-full flex items-center justify-center bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300 shrink-0">
-            <Spinner :size="11" />
-          </span>
-          <span class="fg-secondary italic">En cours…</span>
-        </li>
-      </ol>
+      <div class="kpi-tile">
+        <span class="kpi-label">IOPS Write</span>
+        <span class="kpi-value text-brand-600 dark:text-brand-400">{{ formatIops(wsStore.elbenchoMetrics.iopsWrite) }}</span>
+      </div>
+      <div class="kpi-tile">
+        <span class="kpi-label">{{ t('dashboard.cards.throughputRead') }}</span>
+        <span class="kpi-value text-sky-600 dark:text-sky-400">
+          {{ (wsStore.elbenchoMetrics.throughputReadMbps || 0).toFixed(1) }}
+          <span class="kpi-unit">MB/s</span>
+        </span>
+      </div>
+      <div class="kpi-tile">
+        <span class="kpi-label">{{ t('dashboard.cards.throughputWrite') }}</span>
+        <span class="kpi-value text-sky-600 dark:text-sky-400">
+          {{ (wsStore.elbenchoMetrics.throughputWriteMbps || 0).toFixed(1) }}
+          <span class="kpi-unit">MB/s</span>
+        </span>
+      </div>
     </section>
 
-    <!-- Live metrics grid -->
-    <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-      <StatCard
-        icon="zap"
-        label="IOPS Read"
-        :value="formatIops(wsStore.elbenchoMetrics.iopsRead)"
-        :hint="wsStore.elbenchoMetrics.profileName || t('dashboard.waiting')"
-        tone="brand"
-      />
-      <StatCard
-        icon="zap"
-        label="IOPS Write"
-        :value="formatIops(wsStore.elbenchoMetrics.iopsWrite)"
-        :hint="wsStore.elbenchoMetrics.profileName || t('dashboard.waiting')"
-        tone="brand"
-      />
-      <StatCard
-        icon="hard_drive"
-        :label="t('dashboard.cards.throughputRead')"
-        :value="(wsStore.elbenchoMetrics.throughputReadMbps || 0).toFixed(1)"
-        unit="MB/s"
-        tone="info"
-      />
-      <StatCard
-        icon="hard_drive"
-        :label="t('dashboard.cards.throughputWrite')"
-        :value="(wsStore.elbenchoMetrics.throughputWriteMbps || 0).toFixed(1)"
-        unit="MB/s"
-        tone="info"
-      />
-    </section>
-
-    <!-- Charts row: 2x2 grid (IOPS R, IOPS W, BW R, BW W) -->
-    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <!-- Charts grid: 2x2 IOPS R/W + BW R/W. Each chart 230px. -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
       <div class="card-flush">
         <header class="card-header">
           <span class="card-title">{{ t('jobLive.charts.iopsRead') }}</span>
           <span class="text-xs fg-muted num">{{ wsStore.elbenchoMetrics.history.iopsRead.length }} pts</span>
         </header>
-        <div class="p-4" style="height: 220px;">
+        <div class="px-3 pb-2 pt-1.5" style="height: 230px;">
           <LineChart
             label="IOPS Read"
             :data="wsStore.elbenchoMetrics.history.iopsRead"
@@ -151,7 +115,7 @@
           <span class="card-title">{{ t('jobLive.charts.iopsWrite') }}</span>
           <span class="text-xs fg-muted num">{{ wsStore.elbenchoMetrics.history.iopsWrite.length }} pts</span>
         </header>
-        <div class="p-4" style="height: 220px;">
+        <div class="px-3 pb-2 pt-1.5" style="height: 230px;">
           <LineChart
             label="IOPS Write"
             :data="wsStore.elbenchoMetrics.history.iopsWrite"
@@ -165,7 +129,7 @@
           <span class="card-title">{{ t('jobLive.charts.throughputRead') }}</span>
           <span class="text-xs fg-muted num">{{ wsStore.elbenchoMetrics.history.throughputRead.length }} pts</span>
         </header>
-        <div class="p-4" style="height: 220px;">
+        <div class="px-3 pb-2 pt-1.5" style="height: 230px;">
           <LineChart
             label="Read MB/s"
             :data="wsStore.elbenchoMetrics.history.throughputRead"
@@ -179,7 +143,7 @@
           <span class="card-title">{{ t('jobLive.charts.throughputWrite') }}</span>
           <span class="text-xs fg-muted num">{{ wsStore.elbenchoMetrics.history.throughputWrite.length }} pts</span>
         </header>
-        <div class="p-4" style="height: 220px;">
+        <div class="px-3 pb-2 pt-1.5" style="height: 230px;">
           <LineChart
             label="Write MB/s"
             :data="wsStore.elbenchoMetrics.history.throughputWrite"
@@ -190,82 +154,24 @@
       </div>
     </section>
 
-    <!-- Latency chart row -->
-    <section class="mb-6">
-      <div class="card-flush">
-        <header class="card-header">
-          <span class="card-title">{{ t('jobLive.charts.latency') }}</span>
-          <span class="text-xs fg-muted num">{{ (wsStore.elbenchoMetrics.latencyAvgMs || 0).toFixed(2) }} ms</span>
-        </header>
-        <div class="p-4" style="height: 220px;">
-          <LineChart
-            label="Latence"
-            :data="wsStore.elbenchoMetrics.history.latency"
-            :labels="wsStore.elbenchoMetrics.history.labels"
-            color="#7c3aed"
-          />
-        </div>
+    <!-- Latency strip: shorter, full-width -->
+    <section class="card-flush">
+      <header class="card-header">
+        <span class="card-title">{{ t('jobLive.charts.latency') }}</span>
+        <span class="text-xs fg-muted num">{{ (wsStore.elbenchoMetrics.latencyAvgMs || 0).toFixed(2) }} ms</span>
+      </header>
+      <div class="px-3 pb-2 pt-1.5" style="height: 130px;">
+        <LineChart
+          label="Latence"
+          :data="wsStore.elbenchoMetrics.history.latency"
+          :labels="wsStore.elbenchoMetrics.history.labels"
+          color="#7c3aed"
+        />
       </div>
     </section>
 
-    <!-- Cluster + Workers -->
-    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div class="card-flush">
-        <header class="card-header">
-          <span class="card-title">{{ t('dashboard.sections.cluster') }}</span>
-          <span class="pill">{{ Object.keys(wsStore.nodeMetrics).length }} nodes</span>
-        </header>
-        <div class="px-5 py-2">
-          <div v-if="Object.keys(wsStore.nodeMetrics).length === 0" class="py-6">
-            <EmptyState icon="server" title="En attente des métriques" description="Les données du cluster apparaîtront ici." />
-          </div>
-          <div v-else class="divide-y" style="border-color: var(--border-subtle);">
-            <NodeCard
-              v-for="(metrics, node) in wsStore.nodeMetrics"
-              :key="node"
-              :name="node"
-              :cpu="metrics.cpuPct"
-              :ram="metrics.ramPct"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div class="card-flush">
-        <header class="card-header">
-          <span class="card-title">{{ t('dashboard.sections.workers') }}</span>
-          <span class="pill">{{ workers.length }}</span>
-        </header>
-        <div class="p-5">
-          <div v-if="workers.length === 0">
-            <EmptyState
-              v-if="job?.status === 'failed'"
-              icon="server" title="{{ t('dashboard.workers.none') }}"
-              description="{{ t('dashboard.workers.noneFailed') }}"
-            />
-            <EmptyState
-              v-else
-              icon="server" :title="t('dashboard.sections.provisioning')"
-              description="{{ t('dashboard.workers.noneProvisioning') }}"
-            />
-          </div>
-          <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            <WorkerBadge
-              :ram="wsStore.workerMetrics[w.id]?.ramPct"
-              :net-in="wsStore.workerMetrics[w.id]?.netInBps"
-              :net-out="wsStore.workerMetrics[w.id]?.netOutBps"
-              :disk-read="wsStore.workerMetrics[w.id]?.diskReadBps"
-              :disk-write="wsStore.workerMetrics[w.id]?.diskWriteBps"
-              v-for="(w, i) in workers"
-              :key="w.id"
-              :name="`Worker ${i + 1}`"
-              :status="w.status"
-              :cpu="wsStore.workerMetrics[w.id]?.cpuPct"
-            />
-          </div>
-        </div>
-      </div>
-    </section>
+    <!-- Live logs panel (collapsible) -->
+    <LiveLogsPanel />
   </div>
 </template>
 
@@ -276,16 +182,12 @@ import { useRoute } from 'vue-router'
 import { useWsStore } from '../stores/ws.js'
 import { useJobsStore } from '../stores/jobs.js'
 import { api } from '../api/client.js'
-import LineChart    from '../components/LineChart.vue'
-import NodeCard     from '../components/NodeCard.vue'
-import WorkerBadge  from '../components/WorkerBadge.vue'
-import StatusBadge  from '../components/StatusBadge.vue'
-import StatCard     from '../components/StatCard.vue'
-import EmptyState   from '../components/EmptyState.vue'
-import PageHeader   from '../components/PageHeader.vue'
-import ProgressBar  from '../components/ProgressBar.vue'
-import Icon         from '../components/Icon.vue'
-import Spinner      from '../components/Spinner.vue'
+import LineChart      from '../components/LineChart.vue'
+import StatusBadge    from '../components/StatusBadge.vue'
+import Icon           from '../components/Icon.vue'
+import Spinner        from '../components/Spinner.vue'
+import LiveLogsPanel  from '../components/LiveLogsPanel.vue'
+import PhaseProgress  from '../components/PhaseProgress.vue'
 
 const { t } = useI18n()
 
@@ -303,6 +205,20 @@ const TERMINAL = new Set(['done', 'failed', 'cancelled'])
 const isRunning = computed(() =>
   job.value?.status === 'running' || job.value?.status === 'provisioning'
 )
+
+const showPhaseStrip = computed(() => {
+  const s = job.value?.status
+  return s === 'provisioning' || s === 'running'
+})
+
+// Estimated prefill total = data_disk_gb * num_workers * 10s.
+// Falls back to 0 (PhaseProgress shows elapsed-only) when we cannot infer.
+const prefillEstimatedSeconds = computed(() => {
+  const gb = job.value?.data_disk_gb || 0
+  const n  = workers.value.length || 0
+  if (!gb || !n) return 0
+  return gb * n * 10
+})
 
 function formatIops(n) {
   if (!n && n !== 0) return '—'
@@ -344,3 +260,47 @@ onUnmounted(() => {
   if (pollInterval) clearInterval(pollInterval)
 })
 </script>
+
+<style scoped>
+.page-compact {
+  padding: 0.5rem 1rem 0.75rem;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+@media (min-width: 1280px) {
+  .page-compact {
+    padding: 0.5rem 1.5rem 0.75rem;
+  }
+}
+.kpi-tile {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  background: var(--surface-base);
+}
+.kpi-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.kpi-value {
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 1.35rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.kpi-unit {
+  font-family: "Geist", system-ui, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--fg-muted);
+  margin-left: 0.15rem;
+}
+</style>

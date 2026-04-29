@@ -1,6 +1,7 @@
 package benchmark
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -151,6 +152,49 @@ func (o *Orchestrator) emitProvStep(jobID, step, detail string, progress float64
 		fmt.Fprintf(o.provLog, "%s %s progress=%.2f %s\n",
 			time.Now().UTC().Format(time.RFC3339), step, progress, detail)
 	}
+}
+
+// parseProfileRuntime extracts the per-phase runtime in seconds from a
+// profile's stored config. fio profiles use "runtime=N" (seconds), elbencho
+// profiles use "timelimit=N" (seconds). Both keys live at file scope as
+// KEY=VALUE lines, with comments starting with '#'. JSON-shape configs (the
+// legacy stub format) carry no runtime, so we return 0 in that case and the
+// frontend falls back to elapsed-only display.
+func parseProfileRuntime(configJSON string) int {
+	trimmed := strings.TrimSpace(configJSON)
+	if strings.HasPrefix(trimmed, "{") {
+		return 0
+	}
+	scanner := bufio.NewScanner(strings.NewReader(configJSON))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
+			continue
+		}
+		// Strip inline section markers like [global] which fio uses; we want
+		// only KEY=VALUE entries.
+		if strings.HasPrefix(line, "[") {
+			continue
+		}
+		eq := strings.IndexByte(line, '=')
+		if eq <= 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:eq])
+		val := strings.TrimSpace(line[eq+1:])
+		// Drop any trailing inline comment.
+		if i := strings.IndexAny(val, "#;"); i >= 0 {
+			val = strings.TrimSpace(val[:i])
+		}
+		switch key {
+		case "runtime", "timelimit":
+			n, err := strconv.Atoi(val)
+			if err == nil && n > 0 {
+				return n
+			}
+		}
+	}
+	return 0
 }
 
 // jsonMarshalIndent is a tiny shim so RunExisting does not pull encoding/json
@@ -520,12 +564,16 @@ func (o *Orchestrator) runElbenchoPhase(ctx context.Context, job db.Job, cfg Job
 	o.emitProvStep(job.ID, "prefill_done", "Prefill termine, demarrage du benchmark...", 1.0)
 
 	for _, profileName := range cfg.Profiles {
-		o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "running", Phase: profileName})
-
 		profile, err := o.DB.GetProfileByNameAndEngine(profileName, "elbencho")
 		if err != nil {
 			return fmt.Errorf("profile %s: %w", profileName, err)
 		}
+		runtimeSec := parseProfileRuntime(profile.ConfigJSON)
+		o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{
+			Status:         "running",
+			Phase:          profileName,
+			RuntimeSeconds: runtimeSec,
+		})
 
 		elbenchoCfg, err := elbencho.ProfileToConfig(profile.ConfigJSON)
 		if err != nil {
@@ -599,12 +647,16 @@ func (o *Orchestrator) runFIOPhase(ctx context.Context, job db.Job, cfg JobConfi
 	o.emitProvStep(job.ID, "prefill_done", "Prefill termine, demarrage du benchmark...", 1.0)
 
 	for _, profileName := range cfg.Profiles {
-		o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "running", Phase: profileName})
-
 		profile, err := o.DB.GetProfileByNameAndEngine(profileName, "fio")
 		if err != nil {
 			return fmt.Errorf("profile %s (fio): %w", profileName, err)
 		}
+		runtimeSec := parseProfileRuntime(profile.ConfigJSON)
+		o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{
+			Status:         "running",
+			Phase:          profileName,
+			RuntimeSeconds: runtimeSec,
+		})
 
 		jobfile, err := fio.BuildJobfile(profileName, profile.ConfigJSON, prefillTargets)
 		if err != nil {
