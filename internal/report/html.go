@@ -101,6 +101,7 @@ type reportI18n struct {
 	DurationLabel       string
 	ModeLabel           string
 	DateLabel           string
+	EngineLabel         string
 }
 
 var reportI18nFR = reportI18n{
@@ -164,6 +165,7 @@ var reportI18nFR = reportI18n{
 	DurationLabel:       "Duree",
 	ModeLabel:           "Mode",
 	DateLabel:           "Date",
+	EngineLabel:         "Moteur",
 }
 
 var reportI18nEN = reportI18n{
@@ -227,6 +229,7 @@ var reportI18nEN = reportI18n{
 	DurationLabel:       "Duration",
 	ModeLabel:           "Mode",
 	DateLabel:           "Date",
+	EngineLabel:         "Engine",
 }
 
 type reportData struct {

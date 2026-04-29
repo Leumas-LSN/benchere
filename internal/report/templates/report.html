@@ -287,6 +287,10 @@ tbody td.center { text-align: center; }
     <span class="meta-key">{{.I18n.Client}}</span> {{.Job.ClientName}}
     <span class="meta-sep">|</span>
     <span class="meta-key">{{.I18n.ModeLabel}}</span> {{.Job.Mode}}
+    {{if .Job.Engine}}
+    <span class="meta-sep">|</span>
+    <span class="meta-key">{{.I18n.EngineLabel}}</span> <span class="num">{{.Job.Engine}}</span>
+    {{end}}
     <span class="meta-sep">|</span>
     <span class="meta-key">{{.I18n.DateLabel}}</span> {{.Job.CreatedAt.Format "02/01/2006 15:04"}}
     <span class="meta-sep">|</span>
