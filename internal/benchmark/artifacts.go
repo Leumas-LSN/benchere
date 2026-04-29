@@ -3,6 +3,7 @@ package benchmark
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,12 +22,20 @@ import (
 // This MUST be called before cleanup() runs, since cleanup destroys the VMs
 // and SSH/qm config queries become impossible afterwards.
 func (o *Orchestrator) CollectWorkerArtifacts(ctx context.Context, jobID string, workers []db.Worker) {
+	if o.JobsDir == "" {
+		log.Printf("[artifact] CollectWorkerArtifacts SKIPPED: o.JobsDir is empty")
+		return
+	}
 	jd := o.jobDir(jobID)
+	log.Printf("[artifact] CollectWorkerArtifacts called: jobID=%s n_workers=%d jobsDir=%q jd=%q",
+		jobID, len(workers), o.JobsDir, jd)
 	if jd == "" {
 		return
 	}
 	root := filepath.Join(jd, "workers")
-	if err := os.MkdirAll(root, 0o755); err != nil {
+	err := os.MkdirAll(root, 0o755)
+	log.Printf("[artifact] workers root: path=%q err=%v", root, err)
+	if err != nil {
 		o.logArtifactErr(jd, "workers root: "+err.Error())
 		return
 	}
@@ -46,14 +55,17 @@ func (o *Orchestrator) collectOneWorker(ctx context.Context, jobDir, dir string,
 	info := fmt.Sprintf("idx=%d vmid=%d node=%s ip=%s status=%s\n",
 		idx, w.VMID, w.ProxmoxNode, w.IP, w.Status)
 	_ = os.WriteFile(filepath.Join(dir, "info.txt"), []byte(info), 0o644)
+	log.Printf("[artifact] worker-%d info.txt: bytes=%d", idx, len(info))
 
 	// qm config via Proxmox API. Survives even if the VM is unreachable
 	// over SSH because Proxmox still has the config until DeleteVM lands.
 	if w.ProxmoxNode != "" && w.VMID > 0 && o.Proxmox != nil {
 		if cfg, err := o.Proxmox.GetVMConfig(ctx, w.ProxmoxNode, w.VMID); err == nil {
 			_ = os.WriteFile(filepath.Join(dir, "qm-config.txt"), []byte(cfg), 0o644)
+			log.Printf("[artifact] worker-%d qm-config.txt: bytes=%d", idx, len(cfg))
 		} else {
 			writeUnavailable(filepath.Join(dir, "qm-config.txt"), err)
+			log.Printf("[artifact] worker-%d qm-config.txt: ssh/api error: %v", idx, err)
 			o.logArtifactErr(jobDir, fmt.Sprintf("worker-%d qm config: %v", idx, err))
 		}
 	} else {
@@ -67,6 +79,7 @@ func (o *Orchestrator) collectOneWorker(ctx context.Context, jobDir, dir string,
 		for _, name := range sshFiles() {
 			writeUnavailable(filepath.Join(dir, name), fmt.Errorf("worker has no IP"))
 		}
+		log.Printf("[artifact] worker-%d ssh skipped: no ip", idx)
 		o.logArtifactErr(jobDir, fmt.Sprintf("worker-%d skipped ssh: no ip", idx))
 		return
 	}
@@ -94,10 +107,12 @@ func (o *Orchestrator) collectOneWorker(ctx context.Context, jobDir, dir string,
 		out, err := o.runSSH(ctx, w.IP, c.shell, c.timeout)
 		if err != nil {
 			writeUnavailable(path, err)
+			log.Printf("[artifact] worker-%d %s: ssh error: %v", idx, c.file, err)
 			o.logArtifactErr(jobDir, fmt.Sprintf("worker-%d %s: %v", idx, c.file, err))
 			continue
 		}
 		_ = os.WriteFile(path, out, 0o644)
+		log.Printf("[artifact] worker-%d %s: bytes=%d", idx, c.file, len(out))
 	}
 }
 

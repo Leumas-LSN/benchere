@@ -25,6 +25,10 @@ import (
 var Version = "dev"
 
 func main() {
+	// Mirror the build-stamped Version into the benchmark package so artifact
+	// markers (INIT.txt etc) record which binary wrote them.
+	benchmark.Version = Version
+
 	cfg := config.Load()
 
 	database, err := db.Open(cfg.DBPath)
