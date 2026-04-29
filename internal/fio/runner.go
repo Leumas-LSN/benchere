@@ -11,8 +11,11 @@
 //     elbencho where --size is the total across all (host, target) pairs.
 //
 //   - JSON+ output (--output-format=json+ --status-interval=N) emits one
-//     full JSON document per interval to stdout. The Run loop parses each
-//     boundary-aligned object and emits a Metric on the channel.
+//     full JSON document per interval to stdout in single mode. In
+//     --client/--server mode fio buffers all snapshots and emits a single
+//     final document with client_stats[] populated. Run handles both: it
+//     keeps live boundary parsing for forward compat and re-parses the
+//     captured stdout after fio exits using ParseFinalDocument.
 //
 //   - Latency in fio is reported in nanoseconds inside clat_ns / lat_ns.
 //     Metric.LatencyAvgMs is converted to milliseconds for consistency
@@ -77,6 +80,12 @@ type RunConfig struct {
 // out is the only side-effect channel for live metrics; raw stdout is also
 // persisted to OutputDir/{Label}.stdout when configured, so the bundle has
 // the exact bytes fio emitted.
+//
+// In --client/--server mode fio does not flush per-interval JSON to stdout;
+// it accumulates client_stats[] internally and writes the whole document
+// once at exit. Run therefore re-parses the captured stdout via
+// ParseFinalDocument after cmd.Wait() and emits one Metric per entry, in
+// time order, before closing out.
 func Run(ctx context.Context, cfg RunConfig, out chan<- Metric) error {
 	defer close(out)
 
@@ -113,6 +122,7 @@ func Run(ctx context.Context, cfg RunConfig, out chan<- Metric) error {
 
 	var stderrFile, stdoutFile, jobfileFile *os.File
 	var stderrW io.Writer = os.Stderr
+	stdoutPath := ""
 
 	if cfg.OutputDir != "" && cfg.Label != "" {
 		if err := os.MkdirAll(cfg.OutputDir, 0o755); err != nil {
@@ -130,7 +140,8 @@ func Run(ctx context.Context, cfg RunConfig, out chan<- Metric) error {
 			if data, err := os.ReadFile(hostsfile); err == nil {
 				_ = os.WriteFile(filepath.Join(cfg.OutputDir, cfg.Label+".hostsfile"), data, 0o644)
 			}
-			if f, err := os.Create(filepath.Join(cfg.OutputDir, cfg.Label+".stdout")); err == nil {
+			stdoutPath = filepath.Join(cfg.OutputDir, cfg.Label+".stdout")
+			if f, err := os.Create(stdoutPath); err == nil {
 				stdoutFile = f
 			}
 			if f, err := os.Create(filepath.Join(cfg.OutputDir, cfg.Label+".stderr")); err == nil {
@@ -146,11 +157,14 @@ func Run(ctx context.Context, cfg RunConfig, out chan<- Metric) error {
 		return fmt.Errorf("fio.Run: start: %w", err)
 	}
 
-	// Read stdout, splitting at top-level JSON boundaries: each snapshot
-	// starts with "{" at column 0 and ends with "}" on its own line at
-	// column 0. JSON objects emitted by fio are pretty-printed with a
-	// closing "}" at column 0, so we accumulate lines until that boundary.
-	parseErr := streamSnapshots(ctx, stdoutPipe, stdoutFile, cfg.Label, out)
+	// Live boundary parsing: fio in single mode (no --client) emits one
+	// pretty-printed JSON document per status interval, with the outer
+	// "{" and "}" at column 0. We accumulate each one and emit a Metric
+	// as soon as it closes. In --client mode this loop typically yields
+	// nothing because fio buffers everything until exit; the post-Wait
+	// final-document parser below covers that case.
+	emitted := make(map[string]bool)
+	parseErr := streamSnapshots(ctx, stdoutPipe, stdoutFile, cfg.Label, out, emitted)
 
 	waitErr := cmd.Wait()
 
@@ -159,6 +173,30 @@ func Run(ctx context.Context, cfg RunConfig, out chan<- Metric) error {
 	}
 	if stderrFile != nil {
 		stderrFile.Close()
+	}
+
+	// After fio exits, re-read the captured stdout file and extract any
+	// snapshots we missed. In --client mode the whole document only lands
+	// here; in single mode this is a defensive second pass that filters
+	// against the live emitted set.
+	if waitErr == nil && stdoutPath != "" {
+		if data, err := os.ReadFile(stdoutPath); err == nil && len(data) > 0 {
+			snaps, perr := ParseFinalDocument(data)
+			if perr == nil {
+				for _, snap := range snaps {
+					key := snap.JobName + "|" + snap.Timestamp.Format(time.RFC3339Nano)
+					if emitted[key] {
+						continue
+					}
+					m := snap.ToMetric(cfg.Label)
+					select {
+					case out <- m:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+			}
+		}
 	}
 
 	if waitErr != nil {
@@ -172,14 +210,16 @@ func Run(ctx context.Context, cfg RunConfig, out chan<- Metric) error {
 
 // streamSnapshots reads stdout line by line, accumulating each top-level
 // JSON object, and emits one Metric per completed snapshot. raw, when
-// non-nil, captures every byte fio emitted.
+// non-nil, captures every byte fio emitted. emitted, when non-nil, is
+// populated with a key per metric we sent so the post-Wait final-document
+// pass can avoid duplicates.
 //
 // fio pretty-prints status JSON with the outer "{" on its own line at
 // column 0 and the matching outer "}" also on its own line at column 0.
 // All inner braces are indented. We therefore split on column 0 boundary
 // lines exactly, not on trim-space matches which would also fire on
 // indented inner closes.
-func streamSnapshots(ctx context.Context, src io.Reader, raw io.Writer, label string, out chan<- Metric) error {
+func streamSnapshots(ctx context.Context, src io.Reader, raw io.Writer, label string, out chan<- Metric, emitted map[string]bool) error {
 	r := bufio.NewReader(src)
 	var buf strings.Builder
 	started := false
@@ -191,6 +231,10 @@ func streamSnapshots(ctx context.Context, src io.Reader, raw io.Writer, label st
 		snap, err := ParseStatusSnapshot([]byte(txt))
 		if err != nil {
 			return
+		}
+		if emitted != nil {
+			key := snap.JobName + "|" + snap.Timestamp.Format(time.RFC3339Nano)
+			emitted[key] = true
 		}
 		m := snap.ToMetric(label)
 		select {
