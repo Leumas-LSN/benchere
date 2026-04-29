@@ -87,8 +87,17 @@ export default {
       storage: 'Storage pools à benchmarker',
       workers: 'Workers',
       mode: 'Mode de benchmark',
-      profiles: 'Profils elbencho',
+      engine: 'Moteur de benchmark',
+      profiles: 'Profils de stockage',
       stress: 'Paramètres stress-ng',
+    },
+    engine: {
+      label: 'Moteur de benchmark',
+      help: "fio est le moteur par défaut. Il pilote les workers en --client/--server et émet de la télémétrie JSON+ par intervalle, ce qui rend les charts live et les percentiles plus riches. elbencho est conservé pour la compatibilité avec les rapports v1.10 et antérieurs.",
+      fio: 'fio (recommandé)',
+      fioHint: 'Par défaut. Latences percentiles natives, sizing par job, snapshots JSON+ live.',
+      elbencho: 'elbencho (héritage)',
+      elbenchoHint: 'Moteur historique. --hosts distribué, CSV custom, latence moyenne uniquement.',
     },
     fields: {
       jobName: 'Nom du job',
@@ -125,14 +134,14 @@ export default {
     },
     profilesLoading: 'Chargement des profils…',
     modes: {
-      storage:    { label: 'Stockage', hint: 'IOPS, débit, latence (elbencho)' },
+      storage:    { label: 'Stockage', hint: 'IOPS, débit, latence' },
       cpu:        { label: 'CPU',      hint: 'Charge CPU pure (stress-ng)' },
       mixed:      { label: 'Mixte',    hint: 'Stockage + CPU en parallèle' },
     },
     submit: 'Provisionner et lancer',
     submitting: 'Provisionnement…',
     errors: {
-      profilesEmpty: 'Sélectionne au moins un profil elbencho.',
+      profilesEmpty: 'Sélectionne au moins un profil de stockage.',
       storagesEmpty: 'Sélectionne au moins un storage pool.',
       noNodeSelected: 'Sélectionne au moins un node Proxmox.',
     },
@@ -190,6 +199,15 @@ export default {
     wsLive: 'WS live',
     wsInactive: 'WS inactif',
     cancel: 'Annuler le job',
+  },
+  jobLive: {
+    charts: {
+      iopsRead: 'IOPS Read - live',
+      iopsWrite: 'IOPS Write - live',
+      throughputRead: 'Débit Read (MB/s)',
+      throughputWrite: 'Débit Write (MB/s)',
+      latency: 'Latence moy. (ms)',
+    },
   },
   job: {
     debug: {

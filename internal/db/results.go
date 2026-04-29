@@ -3,11 +3,15 @@ package db
 import "time"
 
 func (d *DB) InsertResult(r Result) error {
+	engine := r.Engine
+	if engine == "" {
+		engine = "elbencho"
+	}
 	_, err := d.Exec(
-		`INSERT INTO results(id,job_id,profile_name,timestamp,iops_read,iops_write,
+		`INSERT INTO results(id,job_id,profile_name,engine,timestamp,iops_read,iops_write,
 		throughput_read_mbps,throughput_write_mbps,latency_avg_ms,latency_p99_ms)
-		VALUES(?,?,?,?,?,?,?,?,?,?)`,
-		r.ID, r.JobID, r.ProfileName, r.Timestamp,
+		VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+		r.ID, r.JobID, r.ProfileName, engine, r.Timestamp,
 		r.IOPSRead, r.IOPSWrite, r.ThroughputReadMBps, r.ThroughputWriteMBps,
 		r.LatencyAvgMs, r.LatencyP99Ms,
 	)
@@ -32,7 +36,7 @@ func (d *DB) InsertProxmoxVMSnapshot(s ProxmoxVMSnapshot) error {
 
 func (d *DB) ListResultsByJob(jobID string) ([]Result, error) {
 	rows, err := d.Query(
-		`SELECT id,job_id,profile_name,timestamp,iops_read,iops_write,
+		`SELECT id,job_id,profile_name,COALESCE(engine,'elbencho'),timestamp,iops_read,iops_write,
 		throughput_read_mbps,throughput_write_mbps,latency_avg_ms,latency_p99_ms
 		FROM results WHERE job_id=? ORDER BY timestamp`,
 		jobID,
@@ -44,7 +48,7 @@ func (d *DB) ListResultsByJob(jobID string) ([]Result, error) {
 	var results []Result
 	for rows.Next() {
 		var r Result
-		if err := rows.Scan(&r.ID, &r.JobID, &r.ProfileName, &r.Timestamp,
+		if err := rows.Scan(&r.ID, &r.JobID, &r.ProfileName, &r.Engine, &r.Timestamp,
 			&r.IOPSRead, &r.IOPSWrite, &r.ThroughputReadMBps, &r.ThroughputWriteMBps,
 			&r.LatencyAvgMs, &r.LatencyP99Ms); err != nil {
 			return nil, err

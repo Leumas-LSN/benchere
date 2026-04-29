@@ -204,16 +204,55 @@
         </div>
       </section>
 
+      <!-- Engine selector (storage / mixed only) -->
+      <section v-if="form.mode !== 'cpu'" class="card space-y-4">
+        <header class="flex items-center justify-between">
+          <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.engine') }}</h2>
+          <span class="card-title">{{ t('newJob.engine.label') }}</span>
+        </header>
+        <p class="helper">{{ t('newJob.engine.help') }}</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label
+            v-for="opt in engineOptions"
+            :key="opt.value"
+            :class="[
+              'group cursor-pointer rounded-xl border p-4 transition-all duration-150',
+              form.engine === opt.value
+                ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/10 shadow-brand'
+                : 'border-default hover:border-strong hover:bg-soft'
+            ]"
+          >
+            <input type="radio" v-model="form.engine" :value="opt.value" class="sr-only" />
+            <div class="flex items-start gap-3">
+              <span
+                :class="[
+                  'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 font-mono text-xs font-bold',
+                  form.engine === opt.value
+                    ? 'bg-brand-500 text-white'
+                    : 'bg-soft fg-secondary'
+                ]"
+              >
+                {{ opt.value }}
+              </span>
+              <div class="min-w-0">
+                <p class="text-sm font-semibold fg-primary">{{ opt.label }}</p>
+                <p class="text-xs fg-muted mt-0.5">{{ opt.hint }}</p>
+              </div>
+            </div>
+          </label>
+        </div>
+      </section>
+
       <!-- Profiles -->
       <section v-if="form.mode !== 'cpu'" class="card space-y-4">
         <header class="flex items-center justify-between">
           <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.profiles') }}</h2>
           <span class="card-title">Étape 4 / 4 · Stockage</span>
         </header>
-        <div v-if="profiles.length === 0" class="text-sm fg-muted">{{ t('newJob.profilesLoading') }}</div>
+        <div v-if="filteredProfiles.length === 0" class="text-sm fg-muted">{{ t('newJob.profilesLoading') }}</div>
         <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-2">
           <label
-            v-for="p in profiles"
+            v-for="p in filteredProfiles"
             :key="p.id"
             :class="[
               'flex items-start gap-3 cursor-pointer rounded-lg border p-3 transition-colors',
@@ -324,10 +363,15 @@ const settings   = ref(null)
 const configured = computed(() => !!settings.value?.proxmox_url)
 
 const modes = [
-  { value: 'storage', icon: 'hard_drive', label: 'Stockage', hint: 'IOPS, débit, latence (elbencho)' },
+  { value: 'storage', icon: 'hard_drive', label: 'Stockage', hint: 'IOPS, débit, latence' },
   { value: 'cpu',     icon: 'cpu',        label: 'CPU',      hint: 'Charge CPU pure (stress-ng)' },
   { value: 'mixed',   icon: 'shuffle',    label: 'Mixte',    hint: 'Stockage + CPU en parallèle' },
 ]
+
+const engineOptions = computed(() => [
+  { value: 'fio',      label: t('newJob.engine.fio'),      hint: t('newJob.engine.fioHint') },
+  { value: 'elbencho', label: t('newJob.engine.elbencho'), hint: t('newJob.engine.elbenchoHint') },
+])
 
 const stressors = ['cpu', 'vm', 'io', 'hdd']
 
@@ -345,6 +389,7 @@ const form = reactive({
   name:             '',
   client_name:      '',
   mode:             'storage',
+  engine:           'fio',
   workers_per_node: 1,
   worker_cpu:       4,
   worker_ram_mb:    4096,
@@ -361,6 +406,12 @@ const allNodesSelected = computed(() =>
   availableNodes.value.length > 0 && selectedNodes.value.length === availableNodes.value.length
 )
 
+// Profiles list filtered by the selected engine. Profiles missing an
+// engine field default to elbencho (legacy DB rows).
+const filteredProfiles = computed(() => {
+  return profiles.value.filter(p => (p.engine || 'elbencho') === form.engine)
+})
+
 function toggleAllNodes() {
   selectedNodes.value = allNodesSelected.value
     ? []
@@ -368,6 +419,15 @@ function toggleAllNodes() {
 }
 
 watch(() => form.mode, () => { error.value = '' })
+
+// When the engine changes, drop any selected profile that does not exist
+// on the new engine. The user keeps profiles whose names match across
+// engines (the six canonical seed profiles do).
+watch(() => form.engine, () => {
+  const validNames = new Set(filteredProfiles.value.map(p => p.name))
+  form.profiles = form.profiles.filter(n => validNames.has(n))
+  error.value = ''
+})
 
 // React to node selection: refetch storage intersection from /api/proxmox/storages?nodes=
 watch(selectedNodes, async (nodes) => {
@@ -429,7 +489,7 @@ onMounted(async () => {
       }
     }
   } catch (_) {
-    // network/JSON failure — leave availableNodes empty; UI shows the empty state
+    // network/JSON failure - leave availableNodes empty; UI shows the empty state
   } finally {
     nodesLoading.value = false
   }
@@ -458,6 +518,7 @@ async function submit() {
     name:             form.name,
     client_name:      form.client_name,
     mode:             form.mode,
+    engine:           form.engine,
     proxmox_nodes:    [...selectedNodes.value],
     workers_per_node: form.workers_per_node,
     worker_cpu:       form.worker_cpu,

@@ -18,6 +18,7 @@ import (
 	"github.com/Leumas-LSN/benchere/internal/ansible"
 	"github.com/Leumas-LSN/benchere/internal/db"
 	"github.com/Leumas-LSN/benchere/internal/elbencho"
+	"github.com/Leumas-LSN/benchere/internal/fio"
 	"github.com/Leumas-LSN/benchere/internal/proxmox"
 	"github.com/Leumas-LSN/benchere/internal/stress"
 	"github.com/Leumas-LSN/benchere/internal/ws"
@@ -69,7 +70,10 @@ func (o *Orchestrator) Run(ctx context.Context, cfg JobConfig) error {
 	return o.RunExisting(ctx, job, cfg)
 }
 
-func (o *Orchestrator) persistMetrics(ctx context.Context, jobID, profileName string, ch <-chan elbencho.Metric) {
+// persistMetrics drains a metric channel onto the DB and broadcasts each
+// sample on the WebSocket. The shape is identical between engines (only
+// the source of truth differs) so the same goroutine handles both.
+func (o *Orchestrator) persistMetrics(ctx context.Context, jobID, profileName, engine string, ch <-chan storageMetric) {
 	for {
 		select {
 		case m, ok := <-ch:
@@ -78,9 +82,10 @@ func (o *Orchestrator) persistMetrics(ctx context.Context, jobID, profileName st
 			}
 			r := db.Result{
 				ID: uuid.NewString(), JobID: jobID, ProfileName: profileName,
+				Engine:    engine,
 				Timestamp: m.Timestamp, IOPSRead: m.IOPSRead, IOPSWrite: m.IOPSWrite,
 				ThroughputReadMBps: m.ThroughputReadMBps, ThroughputWriteMBps: m.ThroughputWriteMBps,
-				LatencyAvgMs: m.LatencyAvgMs,
+				LatencyAvgMs: m.LatencyAvgMs, LatencyP99Ms: m.LatencyP99Ms,
 			}
 			_ = o.DB.InsertResult(r)
 			o.emit(jobID, ws.EventElbenchoMetric, ws.ElbenchoMetricPayload{
@@ -94,6 +99,40 @@ func (o *Orchestrator) persistMetrics(ctx context.Context, jobID, profileName st
 		case <-ctx.Done():
 			return
 		}
+	}
+}
+
+// storageMetric is the engine-agnostic shape used by persistMetrics.
+type storageMetric struct {
+	Timestamp           time.Time
+	IOPSRead            float64
+	IOPSWrite           float64
+	ThroughputReadMBps  float64
+	ThroughputWriteMBps float64
+	LatencyAvgMs        float64
+	LatencyP99Ms        float64
+}
+
+func storageMetricFromElbencho(m elbencho.Metric) storageMetric {
+	return storageMetric{
+		Timestamp:           m.Timestamp,
+		IOPSRead:            m.IOPSRead,
+		IOPSWrite:           m.IOPSWrite,
+		ThroughputReadMBps:  m.ThroughputReadMBps,
+		ThroughputWriteMBps: m.ThroughputWriteMBps,
+		LatencyAvgMs:        m.LatencyAvgMs,
+	}
+}
+
+func storageMetricFromFio(m fio.Metric) storageMetric {
+	return storageMetric{
+		Timestamp:           m.Timestamp,
+		IOPSRead:            m.IOPSRead,
+		IOPSWrite:           m.IOPSWrite,
+		ThroughputReadMBps:  m.ThroughputReadMBps,
+		ThroughputWriteMBps: m.ThroughputWriteMBps,
+		LatencyAvgMs:        m.LatencyAvgMs,
+		LatencyP99Ms:        m.LatencyP99Ms,
 	}
 }
 
@@ -177,8 +216,8 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 			log.Printf("[job %s] mkdir jobdir: %v", job.ID, mkdirErr)
 		} else {
 			markerPath := filepath.Join(jd, "INIT.txt")
-			markerContent := fmt.Sprintf("job=%s started=%s binary_version=%s\n",
-				job.ID, time.Now().UTC().Format(time.RFC3339), Version)
+			markerContent := fmt.Sprintf("job=%s started=%s binary_version=%s engine=%s\n",
+				job.ID, time.Now().UTC().Format(time.RFC3339), Version, cfg.Engine)
 			if err := os.WriteFile(markerPath, []byte(markerContent), 0o644); err != nil {
 				log.Printf("[artifact] init marker write failed: %v", err)
 			} else {
@@ -355,7 +394,7 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 	}
 
 	o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "provisioning", Phase: "ansible"})
-	o.emitProvStep(job.ID, "ansible_start", "Deploiement Ansible (elbencho + stress-ng)...", 0.60)
+	o.emitProvStep(job.ID, "ansible_start", "Deploiement Ansible (elbencho + fio + stress-ng)...", 0.60)
 	targets := make([]ansible.WorkerTarget, len(workerIPs))
 	for i, ip := range workerIPs {
 		targets[i] = ansible.WorkerTarget{IP: ip}
@@ -395,84 +434,39 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 	}
 
 	if cfg.Mode == ModeStorage || cfg.Mode == ModeMixed {
-		elbenchoArtifactDir := ""
+		engine := cfg.Engine
+		if engine == "" {
+			engine = EngineFIO
+		}
+
+		artifactDir := ""
 		ejd := o.jobDir(job.ID)
-		var elbenchoMkdirErr error
+		var subdirErr error
 		if ejd != "" {
-			elbenchoArtifactDir = filepath.Join(ejd, "elbencho")
-			elbenchoMkdirErr = os.MkdirAll(elbenchoArtifactDir, 0o755)
+			artifactDir = filepath.Join(ejd, string(engine))
+			subdirErr = os.MkdirAll(artifactDir, 0o755)
 		}
-		log.Printf("[artifact] elbencho_dir: jd=%q mkdir_err=%v", ejd, elbenchoMkdirErr)
+		log.Printf("[artifact] %s_dir: jd=%q mkdir_err=%v", engine, ejd, subdirErr)
 		if ejd != "" {
-			if elbenchoMkdirErr != nil {
-				log.Printf("[job %s] mkdir elbencho dir: %v", job.ID, elbenchoMkdirErr)
-				elbenchoArtifactDir = ""
+			if subdirErr != nil {
+				log.Printf("[job %s] mkdir engine dir: %v", job.ID, subdirErr)
+				artifactDir = ""
 			} else {
-				elbencho.CaptureVersion(ctx, elbenchoArtifactDir)
+				if engine == EngineFIO {
+					fio.CaptureVersion(ctx, artifactDir)
+				} else {
+					elbencho.CaptureVersion(ctx, artifactDir)
+				}
 			}
 		}
 
-		// Prefill the data disks before any benchmark profile runs. Workers
-		// are provisioned with thin Ceph RBD volumes (or sparse zvols on ZFS),
-		// so untouched extents return zero from the backend at network speed
-		// rather than from real storage. Read profiles measured ~100 GB/s and
-		// sub-millisecond latency before this step was wired in.
-		o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "running", Phase: "prefill"})
-		o.emitProvStep(job.ID, "prefill_start",
-			fmt.Sprintf("Prefill des data disks (%d GB/worker) pour eviter les zero-block reads...", cfg.DataDiskGB), 1.0)
-		log.Printf("[artifact] prefill_dir: jd=%q mkdir_err=%v", elbenchoArtifactDir, "n/a")
-		prefillTargets := buildTargets(cfg.DataDisks)
-		prefillStart := time.Now()
-		if err := elbencho.Prefill(ctx, workerIPs, prefillTargets, cfg.DataDiskGB, elbenchoArtifactDir); err != nil {
-			return o.fail(job.ID, fmt.Errorf("prefill: %w", err))
-		}
-		prefillDur := time.Since(prefillStart)
-		expectedBytes := int64(cfg.DataDiskGB) * 1024 * 1024 * 1024 * int64(len(workerIPs))
-		log.Printf("[prefill] completed in %s, expected %d bytes total (%d GB x %d workers)",
-			prefillDur, expectedBytes, cfg.DataDiskGB, len(workerIPs))
-		if prefillDur < 10*time.Second {
-			log.Printf("[prefill] WARNING: completed too fast for %d GB on %d workers, allocation may be incomplete",
-				cfg.DataDiskGB, len(workerIPs))
-		}
-		o.emitProvStep(job.ID, "prefill_done", "Prefill termine, demarrage du benchmark...", 1.0)
-
-		for _, profileName := range cfg.Profiles {
-			o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "running", Phase: profileName})
-
-			profile, err := o.DB.GetProfileByName(profileName)
-			if err != nil {
-				return o.fail(job.ID, fmt.Errorf("profile %s: %w", profileName, err))
-			}
-
-			elbenchoCfg, err := elbencho.ProfileToConfig(profile.ConfigJSON)
-			if err != nil {
-				return o.fail(job.ID, fmt.Errorf("profile %s config: %w", profileName, err))
-			}
-			profileFile := filepath.Join(o.ProfilesDir, profileName+".elbencho")
-			if err := os.WriteFile(profileFile, []byte(elbenchoCfg), 0644); err != nil {
+		switch engine {
+		case EngineFIO:
+			if err := o.runFIOPhase(ctx, job, cfg, workerIPs, artifactDir); err != nil {
 				return o.fail(job.ID, err)
 			}
-
-			liveCSV := filepath.Join(o.OutputDir, fmt.Sprintf("live_%s_%s.csv", job.ID, profileName))
-			finalCSV := filepath.Join(o.OutputDir, fmt.Sprintf("results_%s_%s.csv", job.ID, profileName))
-
-			metricCtx, cancelMetricCtx := context.WithCancel(ctx)
-			metricsCh := make(chan elbencho.Metric, 100)
-			go elbencho.TailCSV(metricCtx, liveCSV, metricsCh)
-			go o.persistMetrics(metricCtx, job.ID, profileName, metricsCh)
-
-			runTargets := buildTargets(cfg.DataDisks)
-			err = elbencho.Run(ctx, elbencho.RunConfig{
-				Hosts:       workerIPs,
-				ConfigFile:  profileFile,
-				Targets:     runTargets,
-				LiveCSVPath: liveCSV,
-				CSVPath:     finalCSV,
-				Label:       profileName,
-				OutputDir:   elbenchoArtifactDir,
-			})
-			cancelMetricCtx()
-			if err != nil {
+		default:
+			if err := o.runElbenchoPhase(ctx, job, cfg, workerIPs, artifactDir); err != nil {
 				return o.fail(job.ID, err)
 			}
 		}
@@ -500,6 +494,141 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 
 	_ = o.DB.FinishJob(job.ID, "done")
 	o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "done"})
+	return nil
+}
+
+// runElbenchoPhase preserves the v1.10.x storage flow (prefill + per profile
+// elbencho run with TailCSV streaming). Engine selector branches into here
+// when cfg.Engine == "elbencho".
+func (o *Orchestrator) runElbenchoPhase(ctx context.Context, job db.Job, cfg JobConfig, workerIPs []string, artifactDir string) error {
+	o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "running", Phase: "prefill"})
+	o.emitProvStep(job.ID, "prefill_start",
+		fmt.Sprintf("Prefill des data disks (%d GB/worker) pour eviter les zero-block reads...", cfg.DataDiskGB), 1.0)
+	prefillTargets := buildTargets(cfg.DataDisks)
+	prefillStart := time.Now()
+	if err := elbencho.Prefill(ctx, workerIPs, prefillTargets, cfg.DataDiskGB, artifactDir); err != nil {
+		return fmt.Errorf("prefill: %w", err)
+	}
+	prefillDur := time.Since(prefillStart)
+	expectedBytes := int64(cfg.DataDiskGB) * 1024 * 1024 * 1024 * int64(len(workerIPs))
+	log.Printf("[prefill] completed in %s, expected %d bytes total (%d GB x %d workers)",
+		prefillDur, expectedBytes, cfg.DataDiskGB, len(workerIPs))
+	if prefillDur < 10*time.Second {
+		log.Printf("[prefill] WARNING: completed too fast for %d GB on %d workers, allocation may be incomplete",
+			cfg.DataDiskGB, len(workerIPs))
+	}
+	o.emitProvStep(job.ID, "prefill_done", "Prefill termine, demarrage du benchmark...", 1.0)
+
+	for _, profileName := range cfg.Profiles {
+		o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "running", Phase: profileName})
+
+		profile, err := o.DB.GetProfileByNameAndEngine(profileName, "elbencho")
+		if err != nil {
+			return fmt.Errorf("profile %s: %w", profileName, err)
+		}
+
+		elbenchoCfg, err := elbencho.ProfileToConfig(profile.ConfigJSON)
+		if err != nil {
+			return fmt.Errorf("profile %s config: %w", profileName, err)
+		}
+		profileFile := filepath.Join(o.ProfilesDir, profileName+".elbencho")
+		if err := os.WriteFile(profileFile, []byte(elbenchoCfg), 0644); err != nil {
+			return err
+		}
+
+		liveCSV := filepath.Join(o.OutputDir, fmt.Sprintf("live_%s_%s.csv", job.ID, profileName))
+		finalCSV := filepath.Join(o.OutputDir, fmt.Sprintf("results_%s_%s.csv", job.ID, profileName))
+
+		metricCtx, cancelMetricCtx := context.WithCancel(ctx)
+		elbCh := make(chan elbencho.Metric, 100)
+		convertedCh := make(chan storageMetric, 100)
+		go elbencho.TailCSV(metricCtx, liveCSV, elbCh)
+		go func() {
+			defer close(convertedCh)
+			for m := range elbCh {
+				convertedCh <- storageMetricFromElbencho(m)
+			}
+		}()
+		go o.persistMetrics(metricCtx, job.ID, profileName, "elbencho", convertedCh)
+
+		runTargets := buildTargets(cfg.DataDisks)
+		err = elbencho.Run(ctx, elbencho.RunConfig{
+			Hosts:       workerIPs,
+			ConfigFile:  profileFile,
+			Targets:     runTargets,
+			LiveCSVPath: liveCSV,
+			CSVPath:     finalCSV,
+			Label:       profileName,
+			OutputDir:   artifactDir,
+		})
+		cancelMetricCtx()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// runFIOPhase runs prefill via fio then iterates over the selected profiles.
+// fio's --client/--server semantics mean --size is per-job/per-filename, so
+// no multiplication by host or target count is needed (unlike elbencho).
+func (o *Orchestrator) runFIOPhase(ctx context.Context, job db.Job, cfg JobConfig, workerIPs []string, artifactDir string) error {
+	o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "running", Phase: "prefill"})
+	o.emitProvStep(job.ID, "prefill_start",
+		fmt.Sprintf("Prefill fio des data disks (%d GB/disk) pour eviter les zero-block reads...", cfg.DataDiskGB), 1.0)
+	prefillTargets := buildTargets(cfg.DataDisks)
+	prefillStart := time.Now()
+	if err := fio.Prefill(ctx, workerIPs, prefillTargets, cfg.DataDiskGB, artifactDir); err != nil {
+		return fmt.Errorf("prefill: %w", err)
+	}
+	prefillDur := time.Since(prefillStart)
+	log.Printf("[prefill][fio] completed in %s for %d GB on %d workers x %d targets",
+		prefillDur, cfg.DataDiskGB, len(workerIPs), len(prefillTargets))
+	if prefillDur < 5*time.Second {
+		log.Printf("[prefill][fio] WARNING: completed too fast, allocation may be incomplete")
+	}
+	o.emitProvStep(job.ID, "prefill_done", "Prefill termine, demarrage du benchmark...", 1.0)
+
+	for _, profileName := range cfg.Profiles {
+		o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "running", Phase: profileName})
+
+		profile, err := o.DB.GetProfileByNameAndEngine(profileName, "fio")
+		if err != nil {
+			return fmt.Errorf("profile %s (fio): %w", profileName, err)
+		}
+
+		jobfile, err := fio.BuildJobfile(profileName, profile.ConfigJSON, prefillTargets)
+		if err != nil {
+			return fmt.Errorf("build jobfile %s: %w", profileName, err)
+		}
+		// keep jobfile around for the bundle; runner copies it into artifactDir.
+		// remove only after the run finishes.
+		defer os.Remove(jobfile)
+
+		metricCtx, cancelMetricCtx := context.WithCancel(ctx)
+		fioCh := make(chan fio.Metric, 100)
+		convertedCh := make(chan storageMetric, 100)
+
+		go func() {
+			defer close(convertedCh)
+			for m := range fioCh {
+				convertedCh <- storageMetricFromFio(m)
+			}
+		}()
+		go o.persistMetrics(metricCtx, job.ID, profileName, "fio", convertedCh)
+
+		err = fio.Run(ctx, fio.RunConfig{
+			Hosts:             workerIPs,
+			Jobfile:           jobfile,
+			Label:             profileName,
+			OutputDir:         artifactDir,
+			StatusIntervalSec: 2,
+		}, fioCh)
+		cancelMetricCtx()
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

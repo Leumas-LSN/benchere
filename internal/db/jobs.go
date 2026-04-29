@@ -3,9 +3,13 @@ package db
 import "time"
 
 func (d *DB) CreateJob(j Job) error {
+	engine := j.Engine
+	if engine == "" {
+		engine = "elbencho"
+	}
 	_, err := d.Exec(
-		"INSERT INTO jobs(id,name,client_name,status,mode,created_at) VALUES(?,?,?,?,?,?)",
-		j.ID, j.Name, j.ClientName, j.Status, j.Mode, j.CreatedAt,
+		"INSERT INTO jobs(id,name,client_name,status,mode,engine,created_at) VALUES(?,?,?,?,?,?,?)",
+		j.ID, j.Name, j.ClientName, j.Status, j.Mode, engine, j.CreatedAt,
 	)
 	return err
 }
@@ -30,15 +34,15 @@ func (d *DB) GetJob(id string) (Job, error) {
 	var finishedAt *time.Time
 	var errMsg *string
 	err := d.QueryRow(
-		"SELECT id,name,client_name,status,mode,created_at,finished_at,COALESCE(error_message,'') FROM jobs WHERE id=?", id,
-	).Scan(&j.ID, &j.Name, &j.ClientName, &j.Status, &j.Mode, &j.CreatedAt, &finishedAt, &j.ErrorMessage)
+		"SELECT id,name,client_name,status,mode,COALESCE(engine,'elbencho'),created_at,finished_at,COALESCE(error_message,'') FROM jobs WHERE id=?", id,
+	).Scan(&j.ID, &j.Name, &j.ClientName, &j.Status, &j.Mode, &j.Engine, &j.CreatedAt, &finishedAt, &j.ErrorMessage)
 	j.FinishedAt = finishedAt
 	_ = errMsg
 	return j, err
 }
 
 func (d *DB) ListJobs() ([]Job, error) {
-	rows, err := d.Query("SELECT id,name,client_name,status,mode,created_at,finished_at,COALESCE(error_message,'') FROM jobs ORDER BY created_at DESC")
+	rows, err := d.Query("SELECT id,name,client_name,status,mode,COALESCE(engine,'elbencho'),created_at,finished_at,COALESCE(error_message,'') FROM jobs ORDER BY created_at DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +51,7 @@ func (d *DB) ListJobs() ([]Job, error) {
 	for rows.Next() {
 		var j Job
 		var finishedAt *time.Time
-		if err := rows.Scan(&j.ID, &j.Name, &j.ClientName, &j.Status, &j.Mode, &j.CreatedAt, &finishedAt, &j.ErrorMessage); err != nil {
+		if err := rows.Scan(&j.ID, &j.Name, &j.ClientName, &j.Status, &j.Mode, &j.Engine, &j.CreatedAt, &finishedAt, &j.ErrorMessage); err != nil {
 			return nil, err
 		}
 		j.FinishedAt = finishedAt
@@ -74,7 +78,7 @@ func (d *DB) ClearHistory() error {
 // ListActiveJobs retourne les jobs en cours (running ou provisioning).
 func (d *DB) ListActiveJobs() ([]Job, error) {
 	rows, err := d.Query(
-		`SELECT id,name,client_name,status,mode,created_at,finished_at,COALESCE(error_message,'')
+		`SELECT id,name,client_name,status,mode,COALESCE(engine,'elbencho'),created_at,finished_at,COALESCE(error_message,'')
 		 FROM jobs WHERE status IN ('running','provisioning') ORDER BY created_at DESC`,
 	)
 	if err != nil {
@@ -85,7 +89,7 @@ func (d *DB) ListActiveJobs() ([]Job, error) {
 	for rows.Next() {
 		var j Job
 		var finishedAt *time.Time
-		if err := rows.Scan(&j.ID, &j.Name, &j.ClientName, &j.Status, &j.Mode, &j.CreatedAt, &finishedAt, &j.ErrorMessage); err != nil {
+		if err := rows.Scan(&j.ID, &j.Name, &j.ClientName, &j.Status, &j.Mode, &j.Engine, &j.CreatedAt, &finishedAt, &j.ErrorMessage); err != nil {
 			return nil, err
 		}
 		j.FinishedAt = finishedAt
@@ -97,7 +101,7 @@ func (d *DB) ListActiveJobs() ([]Job, error) {
 // ListRecentJobs retourne les N derniers jobs termines (done/failed/cancelled).
 func (d *DB) ListRecentJobs(n int) ([]Job, error) {
 	rows, err := d.Query(
-		`SELECT id,name,client_name,status,mode,created_at,finished_at,COALESCE(error_message,'')
+		`SELECT id,name,client_name,status,mode,COALESCE(engine,'elbencho'),created_at,finished_at,COALESCE(error_message,'')
 		 FROM jobs WHERE status IN ('done','failed','cancelled')
 		 ORDER BY finished_at DESC LIMIT ?`,
 		n,
@@ -110,7 +114,7 @@ func (d *DB) ListRecentJobs(n int) ([]Job, error) {
 	for rows.Next() {
 		var j Job
 		var finishedAt *time.Time
-		if err := rows.Scan(&j.ID, &j.Name, &j.ClientName, &j.Status, &j.Mode, &j.CreatedAt, &finishedAt, &j.ErrorMessage); err != nil {
+		if err := rows.Scan(&j.ID, &j.Name, &j.ClientName, &j.Status, &j.Mode, &j.Engine, &j.CreatedAt, &finishedAt, &j.ErrorMessage); err != nil {
 			return nil, err
 		}
 		j.FinishedAt = finishedAt
