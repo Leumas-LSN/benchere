@@ -23,8 +23,12 @@ import (
 // makes prefill sizing for fio simpler and more predictable.
 //
 // Sequential 1 MiB writes with O_DIRECT, 4 jobs, iodepth 16 per target.
-// outputDir, when non-empty, receives prefill.cmd, prefill.stdout, prefill.stderr,
-// and prefill.jobfile.
+// outputDir, when non-empty, receives prefill.cmd, prefill.stdout,
+// prefill.stderr, prefill.jobfile, and prefill.hostsfile.
+//
+// Multi-host invocation uses --client=<hostsfile> (one host per line). See
+// the package doc on runner.go for why the comma-separated form does not
+// work.
 func Prefill(ctx context.Context, hosts []string, targets []string, sizeGB int, outputDir string) error {
 	if len(hosts) == 0 || len(targets) == 0 || sizeGB <= 0 {
 		return fmt.Errorf("prefill: hosts/targets/size required (got hosts=%d targets=%d sizeGB=%d)",
@@ -44,8 +48,14 @@ func Prefill(ctx context.Context, hosts []string, targets []string, sizeGB int, 
 	}
 	tmp.Close()
 
+	hostsfile, err := writeHostsFile("prefill", hosts)
+	if err != nil {
+		return fmt.Errorf("prefill: %w", err)
+	}
+	defer os.Remove(hostsfile)
+
 	args := []string{
-		"--client=" + strings.Join(hosts, ","),
+		"--client=" + hostsfile,
 		tmp.Name(),
 	}
 	cmd := exec.CommandContext(ctx, "fio", args...)
@@ -61,6 +71,9 @@ func Prefill(ctx context.Context, hosts []string, targets []string, sizeGB int, 
 			cmdLine := "fio " + strings.Join(quoteAll(args), " ") + "\n"
 			_ = os.WriteFile(filepath.Join(outputDir, "prefill.cmd"), []byte(cmdLine), 0o644)
 			_ = os.WriteFile(filepath.Join(outputDir, "prefill.jobfile"), []byte(jobfile), 0o644)
+			if data, err := os.ReadFile(hostsfile); err == nil {
+				_ = os.WriteFile(filepath.Join(outputDir, "prefill.hostsfile"), data, 0o644)
+			}
 			if f, err := os.Create(filepath.Join(outputDir, "prefill.stdout")); err == nil {
 				stdoutFile = f
 				stdoutW = io.MultiWriter(os.Stdout, f)

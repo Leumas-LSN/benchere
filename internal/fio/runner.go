@@ -17,6 +17,17 @@
 //   - Latency in fio is reported in nanoseconds inside clat_ns / lat_ns.
 //     Metric.LatencyAvgMs is converted to milliseconds for consistency
 //     with elbencho metrics.
+//
+// IMPORTANT: fio's --client flag does NOT accept comma-separated hosts.
+// fio --client=h1,h2 parses as host=h1, port=<first integer of h2> due
+// to the host:port grammar. The correct multi-host invocation is
+// --client=hostsfile, where hostsfile is a path to a text file with one
+// host per line. Reproduced on fio 3.39:
+//
+//	$ fio --client=10.0.0.1,10.0.0.2 --version
+//	fio: failed to connect to 10.0.0.1:10
+//
+// We write a temporary hostsfile per invocation and pass --client=<path>.
 package fio
 
 import (
@@ -51,6 +62,7 @@ type RunConfig struct {
 	//   {Label}.stdout       streamed JSON+ snapshots (raw)
 	//   {Label}.stderr       fio messages
 	//   {Label}.jobfile      copy of the jobfile actually used
+	//   {Label}.hostsfile    copy of the hostsfile passed to --client
 	OutputDir string
 
 	// StatusIntervalSec is the interval in seconds between JSON status
@@ -79,8 +91,14 @@ func Run(ctx context.Context, cfg RunConfig, out chan<- Metric) error {
 		interval = 2
 	}
 
+	hostsfile, err := writeHostsFile(cfg.Label, cfg.Hosts)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(hostsfile)
+
 	args := []string{
-		"--client=" + strings.Join(cfg.Hosts, ","),
+		"--client=" + hostsfile,
 		cfg.Jobfile,
 		"--output-format=json+",
 		fmt.Sprintf("--status-interval=%d", interval),
@@ -107,6 +125,10 @@ func Run(ctx context.Context, cfg RunConfig, out chan<- Metric) error {
 			// copy the jobfile so the bundle has the exact content used
 			if data, err := os.ReadFile(cfg.Jobfile); err == nil {
 				_ = os.WriteFile(filepath.Join(cfg.OutputDir, cfg.Label+".jobfile"), data, 0o644)
+			}
+			// copy the hostsfile so the bundle has the exact host list used
+			if data, err := os.ReadFile(hostsfile); err == nil {
+				_ = os.WriteFile(filepath.Join(cfg.OutputDir, cfg.Label+".hostsfile"), data, 0o644)
 			}
 			if f, err := os.Create(filepath.Join(cfg.OutputDir, cfg.Label+".stdout")); err == nil {
 				stdoutFile = f
@@ -228,6 +250,49 @@ func CaptureVersion(ctx context.Context, outputDir string) {
 		out = append(out, []byte(fmt.Sprintf("\n# fio --version failed: %v\n", err))...)
 	}
 	_ = os.WriteFile(filepath.Join(outputDir, "fio-version.txt"), out, 0o644)
+}
+
+// writeHostsFile writes hosts (one per line) to a temp file and returns its
+// path. Caller must os.Remove it. Returns an error if the temp file cannot
+// be created or written.
+//
+// fio's --client flag interprets a comma-separated list as host:port, not
+// as a host list. The supported multi-host syntax is --client=<file> where
+// the file holds one host per line.
+func writeHostsFile(label string, hosts []string) (string, error) {
+	safe := sanitizeLabel(label)
+	f, err := os.CreateTemp("", "benchere-fio-hosts-"+safe+"-*.txt")
+	if err != nil {
+		return "", fmt.Errorf("write hostsfile: %w", err)
+	}
+	for _, h := range hosts {
+		if _, err := fmt.Fprintln(f, h); err != nil {
+			f.Close()
+			os.Remove(f.Name())
+			return "", fmt.Errorf("write hostsfile: %w", err)
+		}
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(f.Name())
+		return "", fmt.Errorf("close hostsfile: %w", err)
+	}
+	return f.Name(), nil
+}
+
+// sanitizeLabel strips characters that os.CreateTemp's pattern parser would
+// reject (path separators) so we can splice the label into the temp filename
+// safely. Empty labels are tolerated.
+func sanitizeLabel(label string) string {
+	if label == "" {
+		return "run"
+	}
+	r := strings.NewReplacer(
+		string(os.PathSeparator), "_",
+		"/", "_",
+		"\\", "_",
+		" ", "_",
+	)
+	return r.Replace(label)
 }
 
 // quoteAll wraps any argument that contains whitespace in double quotes so the
