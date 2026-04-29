@@ -47,8 +47,8 @@ SELECT
 ioengine=libaio
 direct=1
 bs=256k
-iodepth=16
-numjobs=8
+iodepth=128
+numjobs=1
 runtime=300
 time_based=1
 group_reporting=1
@@ -72,8 +72,8 @@ SELECT
 ioengine=libaio
 direct=1
 bs=256k
-iodepth=16
-numjobs=8
+iodepth=128
+numjobs=1
 runtime=300
 time_based=1
 group_reporting=1
@@ -97,8 +97,8 @@ SELECT
 ioengine=libaio
 direct=1
 bs=4k
-iodepth=16
-numjobs=8
+iodepth=128
+numjobs=1
 runtime=180
 time_based=1
 group_reporting=1
@@ -122,8 +122,8 @@ SELECT
 ioengine=libaio
 direct=1
 bs=4k
-iodepth=16
-numjobs=8
+iodepth=128
+numjobs=1
 runtime=180
 time_based=1
 group_reporting=1
@@ -147,8 +147,8 @@ SELECT
 ioengine=libaio
 direct=1
 bs=4k
-iodepth=16
-numjobs=8
+iodepth=128
+numjobs=1
 runtime=180
 time_based=1
 group_reporting=1
@@ -173,8 +173,8 @@ SELECT
 ioengine=libaio
 direct=1
 bs=8k
-iodepth=16
-numjobs=8
+iodepth=128
+numjobs=1
 runtime=180
 time_based=1
 group_reporting=1
