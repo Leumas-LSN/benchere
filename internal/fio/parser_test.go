@@ -101,7 +101,8 @@ func TestStreamSnapshots_BoundaryParsing(t *testing.T) {
 
 	out := make(chan Metric, 4)
 	rawSink := &bytes.Buffer{}
-	if err := streamSnapshots(context.Background(), combined, rawSink, "test-label", out); err != nil && err != io.EOF {
+	emitted := make(map[string]bool)
+	if err := streamSnapshots(context.Background(), combined, rawSink, "test-label", out, emitted); err != nil && err != io.EOF {
 		t.Fatalf("streamSnapshots: %v", err)
 	}
 	close(out)
@@ -157,6 +158,77 @@ func TestBuildPrefillJobfile_OnePerTarget(t *testing.T) {
 	}
 	if !strings.Contains(got, "[prefill_0]") || !strings.Contains(got, "[prefill_1]") {
 		t.Errorf("missing per-target sections: %s", got)
+	}
+}
+
+// TestParseFinalDocumentClientStats covers the --client/--server output
+// shape: a single document at the end of the run with client_stats[]
+// holding one entry per status interval. Each entry has a job_runtime in
+// milliseconds since the run started; ParseFinalDocument folds them into
+// individual snapshots with strictly increasing timestamps.
+func TestParseFinalDocumentClientStats(t *testing.T) {
+	data := loadFixture(t, "client_stats_sample.json")
+
+	snaps, err := ParseFinalDocument(data)
+	if err != nil {
+		t.Fatalf("ParseFinalDocument: %v", err)
+	}
+	if len(snaps) != 3 {
+		t.Fatalf("expected 3 snapshots, got %d", len(snaps))
+	}
+
+	if snaps[0].IOPSRead <= 0 {
+		t.Errorf("first snapshot IOPSRead=%v want > 0", snaps[0].IOPSRead)
+	}
+	if snaps[0].Timestamp.IsZero() {
+		t.Errorf("first snapshot Timestamp is zero")
+	}
+	if snaps[0].JobName != "rand-4k-read" {
+		t.Errorf("JobName=%q want rand-4k-read", snaps[0].JobName)
+	}
+
+	// Timestamps must be strictly increasing (entries are time-ordered).
+	for i := 1; i < len(snaps); i++ {
+		if !snaps[i].Timestamp.After(snaps[i-1].Timestamp) {
+			t.Errorf("snapshot %d timestamp %v not after previous %v", i, snaps[i].Timestamp, snaps[i-1].Timestamp)
+		}
+	}
+
+	// Every snapshot should carry a non-empty version string from the
+	// run-level field, and at least the read leg should be populated.
+	for i, s := range snaps {
+		if s.FioVersion == "" {
+			t.Errorf("snapshot %d missing fio version", i)
+		}
+		if s.IOPSRead <= 0 {
+			t.Errorf("snapshot %d IOPSRead=%v want > 0", i, s.IOPSRead)
+		}
+	}
+}
+
+// TestParseFinalDocumentSingleMode confirms backward compatibility: when
+// the document has the legacy jobs[] shape (no client_stats), we still
+// return one snapshot just like ParseStatusSnapshot would.
+func TestParseFinalDocumentSingleMode(t *testing.T) {
+	data := loadFixture(t, "snapshot_randrw_70r30w.json")
+	snaps, err := ParseFinalDocument(data)
+	if err != nil {
+		t.Fatalf("ParseFinalDocument: %v", err)
+	}
+	if len(snaps) != 1 {
+		t.Fatalf("expected 1 snapshot, got %d", len(snaps))
+	}
+	if snaps[0].IOPSRead <= 0 {
+		t.Errorf("IOPSRead=%v want > 0", snaps[0].IOPSRead)
+	}
+}
+
+// TestParseFinalDocumentEmpty rejects documents that have neither
+// jobs[] nor client_stats[].
+func TestParseFinalDocumentEmpty(t *testing.T) {
+	_, err := ParseFinalDocument([]byte(`{"fio version":"x"}`))
+	if err == nil {
+		t.Errorf("expected error on document with no jobs or client_stats")
 	}
 }
 
