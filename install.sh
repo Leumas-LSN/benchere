@@ -101,7 +101,7 @@ fi
 info "installing OS dependencies (apt)"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-APT_PACKAGES=(ansible curl wget openssh-client ca-certificates python3)
+APT_PACKAGES=(ansible curl wget openssh-client ca-certificates python3 fio)
 # Headless Chromium is used by the report generator to produce PDFs.
 # Debian ships it as 'chromium', Ubuntu as 'chromium-browser' (snap shim).
 case "$ID" in
