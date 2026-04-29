@@ -73,32 +73,32 @@ func (o *Orchestrator) Run(ctx context.Context, cfg JobConfig) error {
 // persistMetrics drains a metric channel onto the DB and broadcasts each
 // sample on the WebSocket. The shape is identical between engines (only
 // the source of truth differs) so the same goroutine handles both.
+//
+// The loop exits only when the channel is closed by its source. We do
+// not exit on ctx.Done because the upstream cancellation already causes
+// the producer to exit and close the channel, and racing the close with
+// ctx.Done can drop buffered metrics. fio in --client mode sends every
+// status snapshot in a tight burst at the end of cmd.Wait, so a premature
+// ctx.Done branch was discarding most of them before they hit the DB.
 func (o *Orchestrator) persistMetrics(ctx context.Context, jobID, profileName, engine string, ch <-chan storageMetric) {
-	for {
-		select {
-		case m, ok := <-ch:
-			if !ok {
-				return
-			}
-			r := db.Result{
-				ID: uuid.NewString(), JobID: jobID, ProfileName: profileName,
-				Engine:    engine,
-				Timestamp: m.Timestamp, IOPSRead: m.IOPSRead, IOPSWrite: m.IOPSWrite,
-				ThroughputReadMBps: m.ThroughputReadMBps, ThroughputWriteMBps: m.ThroughputWriteMBps,
-				LatencyAvgMs: m.LatencyAvgMs, LatencyP99Ms: m.LatencyP99Ms,
-			}
-			_ = o.DB.InsertResult(r)
-			o.emit(jobID, ws.EventElbenchoMetric, ws.ElbenchoMetricPayload{
-				ProfileName:         profileName,
-				IOPSRead:            m.IOPSRead,
-				IOPSWrite:           m.IOPSWrite,
-				ThroughputReadMBps:  m.ThroughputReadMBps,
-				ThroughputWriteMBps: m.ThroughputWriteMBps,
-				LatencyAvgMs:        m.LatencyAvgMs,
-			})
-		case <-ctx.Done():
-			return
+	_ = ctx // retained for signature stability; cancellation is handled upstream
+	for m := range ch {
+		r := db.Result{
+			ID: uuid.NewString(), JobID: jobID, ProfileName: profileName,
+			Engine:    engine,
+			Timestamp: m.Timestamp, IOPSRead: m.IOPSRead, IOPSWrite: m.IOPSWrite,
+			ThroughputReadMBps: m.ThroughputReadMBps, ThroughputWriteMBps: m.ThroughputWriteMBps,
+			LatencyAvgMs: m.LatencyAvgMs, LatencyP99Ms: m.LatencyP99Ms,
 		}
+		_ = o.DB.InsertResult(r)
+		o.emit(jobID, ws.EventElbenchoMetric, ws.ElbenchoMetricPayload{
+			ProfileName:         profileName,
+			IOPSRead:            m.IOPSRead,
+			IOPSWrite:           m.IOPSWrite,
+			ThroughputReadMBps:  m.ThroughputReadMBps,
+			ThroughputWriteMBps: m.ThroughputWriteMBps,
+			LatencyAvgMs:        m.LatencyAvgMs,
+		})
 	}
 }
 
@@ -549,7 +549,11 @@ func (o *Orchestrator) runElbenchoPhase(ctx context.Context, job db.Job, cfg Job
 				convertedCh <- storageMetricFromElbencho(m)
 			}
 		}()
-		go o.persistMetrics(metricCtx, job.ID, profileName, "elbencho", convertedCh)
+		persistDone := make(chan struct{})
+		go func() {
+			o.persistMetrics(metricCtx, job.ID, profileName, "elbencho", convertedCh)
+			close(persistDone)
+		}()
 
 		runTargets := buildTargets(cfg.DataDisks)
 		err = elbencho.Run(ctx, elbencho.RunConfig{
@@ -561,7 +565,12 @@ func (o *Orchestrator) runElbenchoPhase(ctx context.Context, job db.Job, cfg Job
 			Label:       profileName,
 			OutputDir:   artifactDir,
 		})
+		// elbencho.Run returned, but TailCSV is still blocked on metricCtx.
+		// Cancel it so the tail goroutine exits and closes its channel,
+		// then wait for persistMetrics to drain the buffer before moving
+		// on to the next profile.
 		cancelMetricCtx()
+		<-persistDone
 		if err != nil {
 			return err
 		}
@@ -606,8 +615,8 @@ func (o *Orchestrator) runFIOPhase(ctx context.Context, job db.Job, cfg JobConfi
 		defer os.Remove(jobfile)
 
 		metricCtx, cancelMetricCtx := context.WithCancel(ctx)
-		fioCh := make(chan fio.Metric, 100)
-		convertedCh := make(chan storageMetric, 100)
+		fioCh := make(chan fio.Metric, 200)
+		convertedCh := make(chan storageMetric, 200)
 
 		go func() {
 			defer close(convertedCh)
@@ -615,7 +624,11 @@ func (o *Orchestrator) runFIOPhase(ctx context.Context, job db.Job, cfg JobConfi
 				convertedCh <- storageMetricFromFio(m)
 			}
 		}()
-		go o.persistMetrics(metricCtx, job.ID, profileName, "fio", convertedCh)
+		persistDone := make(chan struct{})
+		go func() {
+			o.persistMetrics(metricCtx, job.ID, profileName, "fio", convertedCh)
+			close(persistDone)
+		}()
 
 		err = fio.Run(ctx, fio.RunConfig{
 			Hosts:             workerIPs,
@@ -624,6 +637,11 @@ func (o *Orchestrator) runFIOPhase(ctx context.Context, job db.Job, cfg JobConfi
 			OutputDir:         artifactDir,
 			StatusIntervalSec: 2,
 		}, fioCh)
+		// fio.Run returned: fioCh is closed. Wait for the converter to
+		// drain it into convertedCh (which it then closes), then for
+		// persistMetrics to drain convertedCh into the DB. Only after
+		// both are done is it safe to cancel metricCtx and move on.
+		<-persistDone
 		cancelMetricCtx()
 		if err != nil {
 			return err
