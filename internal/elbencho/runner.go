@@ -39,13 +39,21 @@ func Run(ctx context.Context, cfg RunConfig) error {
 }
 
 // Prefill writes sequentially across each target on every host so that
-// thin-provisioned backends (Ceph RBD, ZFS sparse zvols, ...) allocate every
-// extent before any read profile runs. Without this, read benchmarks against
-// freshly-provisioned worker disks measure the backend's fast path for
-// unwritten extents at network bandwidth instead of real storage performance.
+// thin-provisioned backends (Ceph RBD with object-map, ZFS sparse zvols,
+// LVM-thin, NFS sparse) allocate every extent before any read profile
+// runs. Without this, read benchmarks against freshly-provisioned worker
+// disks measure the backend's zero-block fast path (memory-bandwidth
+// speed) instead of real storage performance.
 //
-// Sequential 1 MiB writes with O_DIRECT, 4 threads per service, no random
-// pattern. The backend allocates physical blocks as the writes land.
+// IMPORTANT: elbencho's --size in distributed mode (--hosts) is the
+// TOTAL dataset across all hosts, not per-host. A naive --size 50G with
+// 9 workers writes 50/9 = 5.5 GB per worker, leaving 88% of every data
+// disk unallocated. We multiply by len(hosts) so each worker writes the
+// full sizeGB. Confirmed live with rbd du during a v1.10.0 run on a
+// 9-worker / 50 GB cluster.
+//
+// Sequential 1 MiB writes with O_DIRECT, 8 threads, iodepth 16. The
+// backend allocates physical blocks as the writes land.
 //
 // outputDir, when non-empty, receives prefill.cmd, prefill.stdout, prefill.stderr.
 func Prefill(ctx context.Context, hosts []string, targets []string, sizeGB int, outputDir string) error {
@@ -53,13 +61,14 @@ func Prefill(ctx context.Context, hosts []string, targets []string, sizeGB int, 
 		return fmt.Errorf("prefill: hosts/targets/size required (got hosts=%d targets=%d sizeGB=%d)",
 			len(hosts), len(targets), sizeGB)
 	}
+	totalSizeGB := sizeGB * len(hosts)
 	args := []string{
 		"--hosts", strings.Join(hosts, ","),
 		"--write",
 		"--block", "1M",
-		"--size", fmt.Sprintf("%dG", sizeGB),
-		"--threads", "4",
-		"--iodepth", "4",
+		"--size", fmt.Sprintf("%dG", totalSizeGB),
+		"--threads", "8",
+		"--iodepth", "16",
 		"--direct",
 		"--label", "prefill",
 	}

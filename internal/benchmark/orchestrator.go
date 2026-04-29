@@ -422,8 +422,17 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 			fmt.Sprintf("Prefill des data disks (%d GB/worker) pour eviter les zero-block reads...", cfg.DataDiskGB), 1.0)
 		log.Printf("[artifact] prefill_dir: jd=%q mkdir_err=%v", elbenchoArtifactDir, "n/a")
 		prefillTargets := buildTargets(cfg.DataDisks)
+		prefillStart := time.Now()
 		if err := elbencho.Prefill(ctx, workerIPs, prefillTargets, cfg.DataDiskGB, elbenchoArtifactDir); err != nil {
 			return o.fail(job.ID, fmt.Errorf("prefill: %w", err))
+		}
+		prefillDur := time.Since(prefillStart)
+		expectedBytes := int64(cfg.DataDiskGB) * 1024 * 1024 * 1024 * int64(len(workerIPs))
+		log.Printf("[prefill] completed in %s, expected %d bytes total (%d GB x %d workers)",
+			prefillDur, expectedBytes, cfg.DataDiskGB, len(workerIPs))
+		if prefillDur < 10*time.Second {
+			log.Printf("[prefill] WARNING: completed too fast for %d GB on %d workers, allocation may be incomplete",
+				cfg.DataDiskGB, len(workerIPs))
 		}
 		o.emitProvStep(job.ID, "prefill_done", "Prefill termine, demarrage du benchmark...", 1.0)
 
