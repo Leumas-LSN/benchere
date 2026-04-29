@@ -136,33 +136,39 @@ install -m 0755 "$TMP/benchere" /opt/benchere/benchere
 # --- ansible playbook (embedded inline so install.sh is self-contained) ---
 cat > /opt/benchere/ansible/playbooks/provision_worker.yml <<'PLAYBOOK'
 ---
-- name: Provision elbencho worker
+- name: Provision benchmark worker (elbencho + fio + stress-ng)
   hosts: workers
   become: true
   vars:
     elbencho_deb: /tmp/elbencho_amd64.deb
+
   tasks:
     - name: Copy elbencho deb
       copy:
         src: "{{ elbencho_deb_local }}"
         dest: "{{ elbencho_deb }}"
         mode: '0644'
+
     - name: Install elbencho
       apt:
         deb: "{{ elbencho_deb }}"
         state: present
-    - name: Install stress-ng and qemu-guest-agent
+
+    - name: Install stress-ng, fio and qemu-guest-agent
       apt:
         name:
           - stress-ng
+          - fio
           - qemu-guest-agent
         state: present
         update_cache: true
+
     - name: Start and enable qemu-guest-agent
       systemd:
         name: qemu-guest-agent
         state: started
         enabled: true
+
     - name: Create elbencho systemd service
       copy:
         dest: /etc/systemd/system/elbencho.service
@@ -178,9 +184,34 @@ cat > /opt/benchere/ansible/playbooks/provision_worker.yml <<'PLAYBOOK'
           User=root
           [Install]
           WantedBy=multi-user.target
+
     - name: Start and enable elbencho service
       systemd:
         name: elbencho
+        state: started
+        enabled: true
+        daemon_reload: true
+
+    - name: Create fio-server systemd service
+      copy:
+        dest: /etc/systemd/system/fio-server.service
+        content: |
+          [Unit]
+          Description=fio --server (distributed benchmark agent)
+          After=network-online.target
+          Wants=network-online.target
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/fio --server
+          Restart=on-failure
+          RestartSec=5
+          User=root
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Start and enable fio-server service
+      systemd:
+        name: fio-server
         state: started
         enabled: true
         daemon_reload: true
