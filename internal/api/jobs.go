@@ -22,6 +22,7 @@ type createJobRequest struct {
 	Name           string         `json:"name"`
 	ClientName     string         `json:"client_name"`
 	Mode           string         `json:"mode"`
+	Engine         string         `json:"engine"`
 	ProxmoxNodes   []string       `json:"proxmox_nodes"`
 	WorkersPerNode int            `json:"workers_per_node"`
 	WorkerCPU      int            `json:"worker_cpu"`
@@ -78,6 +79,17 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Engine selection. Default to fio (v1.11.0+). Validate against the
+	// known set so a typo cannot run a phantom engine.
+	engine := req.Engine
+	if engine == "" {
+		engine = string(benchmark.EngineFIO)
+	}
+	if engine != string(benchmark.EngineFIO) && engine != string(benchmark.EngineElbencho) {
+		http.Error(w, fmt.Sprintf("invalid engine: %q (must be fio or elbencho)", engine), http.StatusBadRequest)
+		return
+	}
+
 	proxmoxURL, _ := s.DB.GetSetting("proxmox_url")
 	proxmoxToken, _ := s.DB.GetSetting("proxmox_token")
 	storagePool, _ := s.DB.GetSetting("storage_pool")
@@ -123,6 +135,7 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		Name:           req.Name,
 		ClientName:     req.ClientName,
 		Mode:           benchmark.Mode(req.Mode),
+		Engine:         benchmark.Engine(engine),
 		ProxmoxNodes:   req.ProxmoxNodes,
 		WorkersPerNode: req.WorkersPerNode,
 		WorkerCPU:      req.WorkerCPU,
@@ -305,7 +318,7 @@ func (s *Server) exportJobCSV(w http.ResponseWriter, r *http.Request) {
 
 	cw := csv.NewWriter(w)
 	_ = cw.Write([]string{
-		"timestamp", "profile_name",
+		"timestamp", "profile_name", "engine",
 		"iops_read", "iops_write",
 		"throughput_read_mbps", "throughput_write_mbps",
 		"latency_avg_ms",
@@ -314,6 +327,7 @@ func (s *Server) exportJobCSV(w http.ResponseWriter, r *http.Request) {
 		_ = cw.Write([]string{
 			row.Timestamp.UTC().Format("2006-01-02T15:04:05Z"),
 			row.ProfileName,
+			row.Engine,
 			fmt.Sprintf("%.2f", row.IOPSRead),
 			fmt.Sprintf("%.2f", row.IOPSWrite),
 			fmt.Sprintf("%.2f", row.ThroughputReadMBps),
