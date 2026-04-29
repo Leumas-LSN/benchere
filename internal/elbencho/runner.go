@@ -46,11 +46,15 @@ func Run(ctx context.Context, cfg RunConfig) error {
 // speed) instead of real storage performance.
 //
 // IMPORTANT: elbencho's --size in distributed mode (--hosts) is the
-// TOTAL dataset across all hosts, not per-host. A naive --size 50G with
-// 9 workers writes 50/9 = 5.5 GB per worker, leaving 88% of every data
-// disk unallocated. We multiply by len(hosts) so each worker writes the
-// full sizeGB. Confirmed live with rbd du during a v1.10.0 run on a
-// 9-worker / 50 GB cluster.
+// TOTAL dataset across all (host, target) pairs. With N hosts and M
+// targets per host, --size is split into N*M chunks, one per (host,
+// target) pair. We must therefore set --size to sizeGB * N * M so each
+// individual disk on each worker actually gets sizeGB written to it.
+//
+// Confirmed live with rbd du during a v1.10.0 run: 9 workers x 1 disk
+// x sizeGB=50 with --size 50G allocated only 5.6 GB per disk (= 50/9).
+// v1.10.2 fixed the host factor; v1.10.3 adds the target factor for
+// multi-disk worker configurations.
 //
 // Sequential 1 MiB writes with O_DIRECT, 8 threads, iodepth 16. The
 // backend allocates physical blocks as the writes land.
@@ -61,7 +65,7 @@ func Prefill(ctx context.Context, hosts []string, targets []string, sizeGB int, 
 		return fmt.Errorf("prefill: hosts/targets/size required (got hosts=%d targets=%d sizeGB=%d)",
 			len(hosts), len(targets), sizeGB)
 	}
-	totalSizeGB := sizeGB * len(hosts)
+	totalSizeGB := sizeGB * len(hosts) * len(targets)
 	args := []string{
 		"--hosts", strings.Join(hosts, ","),
 		"--write",
