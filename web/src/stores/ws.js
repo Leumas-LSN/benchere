@@ -12,7 +12,14 @@ export const useWsStore = defineStore('ws', () => {
     throughputReadMbps: 0, throughputWriteMbps: 0,
     latencyAvgMs: 0,
     profileName: '',
-    history: { iopsRead: [], iopsWrite: [], latency: [], labels: [] },
+    history: {
+      iopsRead: [],
+      iopsWrite: [],
+      throughputRead: [],
+      throughputWrite: [],
+      latency: [],
+      labels: [],
+    },
   })
 
   const nodeMetrics  = reactive({})  // { nodeName: { cpuPct, ramPct, loadAvg } }
@@ -50,13 +57,17 @@ export const useWsStore = defineStore('ws', () => {
         elbenchoMetrics.latencyAvgMs        = p.latency_avg_ms
         elbenchoMetrics.profileName         = p.profile_name
         const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-        elbenchoMetrics.history.iopsRead.push(p.iops_read)
-        elbenchoMetrics.history.iopsWrite.push(p.iops_write)
-        elbenchoMetrics.history.latency.push(p.latency_avg_ms)
+        elbenchoMetrics.history.iopsRead.push(p.iops_read || 0)
+        elbenchoMetrics.history.iopsWrite.push(p.iops_write || 0)
+        elbenchoMetrics.history.throughputRead.push(p.throughput_read_mbps || 0)
+        elbenchoMetrics.history.throughputWrite.push(p.throughput_write_mbps || 0)
+        elbenchoMetrics.history.latency.push(p.latency_avg_ms || 0)
         elbenchoMetrics.history.labels.push(now)
         if (elbenchoMetrics.history.labels.length > MAX_HISTORY) {
           elbenchoMetrics.history.iopsRead.shift()
           elbenchoMetrics.history.iopsWrite.shift()
+          elbenchoMetrics.history.throughputRead.shift()
+          elbenchoMetrics.history.throughputWrite.shift()
           elbenchoMetrics.history.latency.shift()
           elbenchoMetrics.history.labels.shift()
         }
@@ -105,6 +116,8 @@ export const useWsStore = defineStore('ws', () => {
     elbenchoMetrics.profileName = ''
     elbenchoMetrics.history.iopsRead.splice(0)
     elbenchoMetrics.history.iopsWrite.splice(0)
+    elbenchoMetrics.history.throughputRead.splice(0)
+    elbenchoMetrics.history.throughputWrite.splice(0)
     elbenchoMetrics.history.latency.splice(0)
     elbenchoMetrics.history.labels.splice(0)
     Object.keys(nodeMetrics).forEach(k => delete nodeMetrics[k])

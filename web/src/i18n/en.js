@@ -200,6 +200,15 @@ export default {
     wsInactive: 'WS inactive',
     cancel: 'Cancel job',
   },
+  jobLive: {
+    charts: {
+      iopsRead: 'IOPS Read - live',
+      iopsWrite: 'IOPS Write - live',
+      throughputRead: 'Read throughput (MB/s)',
+      throughputWrite: 'Write throughput (MB/s)',
+      latency: 'Avg latency (ms)',
+    },
+  },
   job: {
     debug: {
       button: 'Download debug bundle',

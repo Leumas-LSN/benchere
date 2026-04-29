@@ -116,25 +116,25 @@
       />
       <StatCard
         icon="hard_drive"
-        label="Débit Read"
+        :label="t('dashboard.cards.throughputRead')"
         :value="(wsStore.elbenchoMetrics.throughputReadMbps || 0).toFixed(1)"
         unit="MB/s"
         tone="info"
       />
       <StatCard
-        icon="clock"
-        label="Latence avg"
-        :value="(wsStore.elbenchoMetrics.latencyAvgMs || 0).toFixed(2)"
-        unit="ms"
-        :tone="wsStore.elbenchoMetrics.latencyAvgMs > 5 ? 'danger' : 'success'"
+        icon="hard_drive"
+        :label="t('dashboard.cards.throughputWrite')"
+        :value="(wsStore.elbenchoMetrics.throughputWriteMbps || 0).toFixed(1)"
+        unit="MB/s"
+        tone="info"
       />
     </section>
 
-    <!-- Charts row -->
+    <!-- Charts row: 2x2 grid (IOPS R, IOPS W, BW R, BW W) -->
     <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
       <div class="card-flush">
         <header class="card-header">
-          <span class="card-title">IOPS — temps réel</span>
+          <span class="card-title">{{ t('jobLive.charts.iopsRead') }}</span>
           <span class="text-xs fg-muted num">{{ wsStore.elbenchoMetrics.history.iopsRead.length }} pts</span>
         </header>
         <div class="p-4" style="height: 220px;">
@@ -148,7 +148,54 @@
       </div>
       <div class="card-flush">
         <header class="card-header">
-          <span class="card-title">Latence avg (ms)</span>
+          <span class="card-title">{{ t('jobLive.charts.iopsWrite') }}</span>
+          <span class="text-xs fg-muted num">{{ wsStore.elbenchoMetrics.history.iopsWrite.length }} pts</span>
+        </header>
+        <div class="p-4" style="height: 220px;">
+          <LineChart
+            label="IOPS Write"
+            :data="wsStore.elbenchoMetrics.history.iopsWrite"
+            :labels="wsStore.elbenchoMetrics.history.labels"
+            color="#0ea5e9"
+          />
+        </div>
+      </div>
+      <div class="card-flush">
+        <header class="card-header">
+          <span class="card-title">{{ t('jobLive.charts.throughputRead') }}</span>
+          <span class="text-xs fg-muted num">{{ wsStore.elbenchoMetrics.history.throughputRead.length }} pts</span>
+        </header>
+        <div class="p-4" style="height: 220px;">
+          <LineChart
+            label="Read MB/s"
+            :data="wsStore.elbenchoMetrics.history.throughputRead"
+            :labels="wsStore.elbenchoMetrics.history.labels"
+            color="#10b981"
+          />
+        </div>
+      </div>
+      <div class="card-flush">
+        <header class="card-header">
+          <span class="card-title">{{ t('jobLive.charts.throughputWrite') }}</span>
+          <span class="text-xs fg-muted num">{{ wsStore.elbenchoMetrics.history.throughputWrite.length }} pts</span>
+        </header>
+        <div class="p-4" style="height: 220px;">
+          <LineChart
+            label="Write MB/s"
+            :data="wsStore.elbenchoMetrics.history.throughputWrite"
+            :labels="wsStore.elbenchoMetrics.history.labels"
+            color="#a855f7"
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- Latency chart row -->
+    <section class="mb-6">
+      <div class="card-flush">
+        <header class="card-header">
+          <span class="card-title">{{ t('jobLive.charts.latency') }}</span>
+          <span class="text-xs fg-muted num">{{ (wsStore.elbenchoMetrics.latencyAvgMs || 0).toFixed(2) }} ms</span>
         </header>
         <div class="p-4" style="height: 220px;">
           <LineChart
