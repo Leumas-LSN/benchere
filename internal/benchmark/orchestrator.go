@@ -25,6 +25,11 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// Version is the binary version stamp, mirrored from cmd/benchere/main.go's
+// Version var so artifact markers can record which build wrote them. Set at
+// startup via benchmark.Version = main.Version. Defaults to "dev".
+var Version = "dev"
+
 type Orchestrator struct {
 	DB          *db.DB
 	Proxmox     *proxmox.Client
@@ -161,10 +166,24 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 	// first thing in the run. This means the debug bundle has the exact
 	// in-memory config used by the orchestrator, including fields that are
 	// not in the db.Job row (worker sizing, profiles, storage pool).
-	if jd := o.jobDir(job.ID); jd != "" {
-		if err := os.MkdirAll(jd, 0o755); err != nil {
-			log.Printf("[job %s] mkdir jobdir: %v", job.ID, err)
+	jd := o.jobDir(job.ID)
+	var mkdirErr error
+	if jd != "" {
+		mkdirErr = os.MkdirAll(jd, 0o755)
+	}
+	log.Printf("[artifact] runexisting_start: jd=%q mkdir_err=%v", jd, mkdirErr)
+	if jd != "" {
+		if mkdirErr != nil {
+			log.Printf("[job %s] mkdir jobdir: %v", job.ID, mkdirErr)
 		} else {
+			markerPath := filepath.Join(jd, "INIT.txt")
+			markerContent := fmt.Sprintf("job=%s started=%s binary_version=%s\n",
+				job.ID, time.Now().UTC().Format(time.RFC3339), Version)
+			if err := os.WriteFile(markerPath, []byte(markerContent), 0o644); err != nil {
+				log.Printf("[artifact] init marker write failed: %v", err)
+			} else {
+				log.Printf("[artifact] init marker written at %s", markerPath)
+			}
 			if data, err := jsonMarshalIndent(cfg); err == nil {
 				_ = os.WriteFile(filepath.Join(jd, "config.json"), data, 0o644)
 			}
@@ -342,9 +361,11 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 		targets[i] = ansible.WorkerTarget{IP: ip}
 	}
 	ansibleOutDir := ""
-	if jd := o.jobDir(job.ID); jd != "" {
-		ansibleOutDir = filepath.Join(jd, "ansible")
+	ajd := o.jobDir(job.ID)
+	if ajd != "" {
+		ansibleOutDir = filepath.Join(ajd, "ansible")
 	}
+	log.Printf("[artifact] ansible_dir: jd=%q mkdir_err=%v", ajd, "n/a")
 	if err := o.Ansible.ProvisionWorkers(ctx, targets, ansibleOutDir); err != nil {
 		diag := ""
 		if len(workerIPs) > 0 {
@@ -375,10 +396,16 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 
 	if cfg.Mode == ModeStorage || cfg.Mode == ModeMixed {
 		elbenchoArtifactDir := ""
-		if jd := o.jobDir(job.ID); jd != "" {
-			elbenchoArtifactDir = filepath.Join(jd, "elbencho")
-			if err := os.MkdirAll(elbenchoArtifactDir, 0o755); err != nil {
-				log.Printf("[job %s] mkdir elbencho dir: %v", job.ID, err)
+		ejd := o.jobDir(job.ID)
+		var elbenchoMkdirErr error
+		if ejd != "" {
+			elbenchoArtifactDir = filepath.Join(ejd, "elbencho")
+			elbenchoMkdirErr = os.MkdirAll(elbenchoArtifactDir, 0o755)
+		}
+		log.Printf("[artifact] elbencho_dir: jd=%q mkdir_err=%v", ejd, elbenchoMkdirErr)
+		if ejd != "" {
+			if elbenchoMkdirErr != nil {
+				log.Printf("[job %s] mkdir elbencho dir: %v", job.ID, elbenchoMkdirErr)
 				elbenchoArtifactDir = ""
 			} else {
 				elbencho.CaptureVersion(ctx, elbenchoArtifactDir)
@@ -393,6 +420,7 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 		o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "running", Phase: "prefill"})
 		o.emitProvStep(job.ID, "prefill_start",
 			fmt.Sprintf("Prefill des data disks (%d GB/worker) pour eviter les zero-block reads...", cfg.DataDiskGB), 1.0)
+		log.Printf("[artifact] prefill_dir: jd=%q mkdir_err=%v", elbenchoArtifactDir, "n/a")
 		prefillTargets := buildTargets(cfg.DataDisks)
 		if err := elbencho.Prefill(ctx, workerIPs, prefillTargets, cfg.DataDiskGB, elbenchoArtifactDir); err != nil {
 			return o.fail(job.ID, fmt.Errorf("prefill: %w", err))
