@@ -152,6 +152,7 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		SSHKey:      s.Orchestrator.SSHKey,
 		ProfilesDir: s.Orchestrator.ProfilesDir,
 		OutputDir:   s.Orchestrator.OutputDir,
+		JobsDir:     s.Orchestrator.JobsDir,
 	}
 
 	go func() {
