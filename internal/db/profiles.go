@@ -8,6 +8,7 @@ import (
 type Profile struct {
 	ID             string `json:"id"`
 	Name           string `json:"name"`
+	Engine         string `json:"engine"`
 	ConfigJSON     string `json:"config_json"`
 	Description    string `json:"description"`
 	ThresholdsJSON string `json:"thresholds_json"`
@@ -21,10 +22,12 @@ type ProfileThresholds struct {
 	MaxLatencyMs float64 `json:"max_latency_ms"`
 }
 
-// ListProfiles returns all profiles, built-ins first, then alphabetically by name.
+// ListProfiles returns all profiles ordered by engine, builtin, then name.
+// Both fio and elbencho profiles are returned; the frontend filters by
+// the currently selected engine when building the new-job form.
 func (d *DB) ListProfiles() ([]Profile, error) {
 	rows, err := d.Query(
-		"SELECT id, name, config_json, description, thresholds_json, is_builtin FROM benchmark_profiles ORDER BY is_builtin DESC, name ASC",
+		"SELECT id, name, engine, config_json, description, thresholds_json, is_builtin FROM benchmark_profiles ORDER BY engine ASC, is_builtin DESC, name ASC",
 	)
 	if err != nil {
 		return nil, err
@@ -34,7 +37,7 @@ func (d *DB) ListProfiles() ([]Profile, error) {
 	for rows.Next() {
 		var p Profile
 		var isBuiltin int
-		if err := rows.Scan(&p.ID, &p.Name, &p.ConfigJSON, &p.Description, &p.ThresholdsJSON, &isBuiltin); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Engine, &p.ConfigJSON, &p.Description, &p.ThresholdsJSON, &isBuiltin); err != nil {
 			return nil, err
 		}
 		p.IsBuiltin = isBuiltin == 1
@@ -51,19 +54,26 @@ func (d *DB) GetProfile(id string) (Profile, error) {
 	var p Profile
 	var isBuiltin int
 	err := d.QueryRow(
-		"SELECT id, name, config_json, description, thresholds_json, is_builtin FROM benchmark_profiles WHERE id = ?", id,
-	).Scan(&p.ID, &p.Name, &p.ConfigJSON, &p.Description, &p.ThresholdsJSON, &isBuiltin)
+		"SELECT id, name, engine, config_json, description, thresholds_json, is_builtin FROM benchmark_profiles WHERE id = ?", id,
+	).Scan(&p.ID, &p.Name, &p.Engine, &p.ConfigJSON, &p.Description, &p.ThresholdsJSON, &isBuiltin)
 	p.IsBuiltin = isBuiltin == 1
 	return p, err
 }
 
-// GetProfileByName returns a profile by name.
+// GetProfileByName returns the elbencho profile with the given name. Kept
+// for backward compatibility with callers that predate the engine column.
 func (d *DB) GetProfileByName(name string) (Profile, error) {
+	return d.GetProfileByNameAndEngine(name, "elbencho")
+}
+
+// GetProfileByNameAndEngine returns the profile matching both name and
+// engine. The (name, engine) tuple is unique in the schema (since v1.11.0).
+func (d *DB) GetProfileByNameAndEngine(name, engine string) (Profile, error) {
 	var p Profile
 	var isBuiltin int
 	err := d.QueryRow(
-		"SELECT id, name, config_json, description, thresholds_json, is_builtin FROM benchmark_profiles WHERE name = ?", name,
-	).Scan(&p.ID, &p.Name, &p.ConfigJSON, &p.Description, &p.ThresholdsJSON, &isBuiltin)
+		"SELECT id, name, engine, config_json, description, thresholds_json, is_builtin FROM benchmark_profiles WHERE name = ? AND engine = ?", name, engine,
+	).Scan(&p.ID, &p.Name, &p.Engine, &p.ConfigJSON, &p.Description, &p.ThresholdsJSON, &isBuiltin)
 	p.IsBuiltin = isBuiltin == 1
 	return p, err
 }
@@ -77,12 +87,22 @@ func (d *DB) UpdateProfile(id string, description, thresholdsJSON string) error 
 	return err
 }
 
-// CreateProfile creates a new non-builtin profile.
+// CreateProfile creates a new non-builtin profile. Engine defaults to
+// elbencho when empty for backward compatibility with the existing UI.
 func (d *DB) CreateProfile(name, configJSON, description string) (string, error) {
+	return d.CreateProfileWithEngine(name, "elbencho", configJSON, description)
+}
+
+// CreateProfileWithEngine creates a new non-builtin profile pinned to the
+// given engine. Used when the API explicitly carries an engine field.
+func (d *DB) CreateProfileWithEngine(name, engine, configJSON, description string) (string, error) {
+	if engine == "" {
+		engine = "elbencho"
+	}
 	id := uuid.NewString()
 	_, err := d.Exec(
-		"INSERT INTO benchmark_profiles (id, name, config_json, description, thresholds_json, is_builtin) VALUES (?, ?, ?, ?, \"\", 0)",
-		id, name, configJSON, description,
+		"INSERT INTO benchmark_profiles (id, name, engine, config_json, description, thresholds_json, is_builtin) VALUES (?, ?, ?, ?, ?, \"\", 0)",
+		id, name, engine, configJSON, description,
 	)
 	if err != nil {
 		return "", err

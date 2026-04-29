@@ -8,6 +8,7 @@ type Job struct {
 	ClientName   string     `json:"client_name"`
 	Status       string     `json:"status"`
 	Mode         string     `json:"mode"`
+	Engine       string     `json:"engine"`
 	ErrorMessage string     `json:"error_message,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 	FinishedAt   *time.Time `json:"finished_at,omitempty"`
@@ -25,6 +26,7 @@ type Worker struct {
 type BenchmarkProfile struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`
+	Engine     string `json:"engine"`
 	ConfigJSON string `json:"config_json"`
 }
 
@@ -32,6 +34,7 @@ type Result struct {
 	ID                  string
 	JobID               string
 	ProfileName         string
+	Engine              string
 	Timestamp           time.Time
 	IOPSRead            float64
 	IOPSWrite           float64
