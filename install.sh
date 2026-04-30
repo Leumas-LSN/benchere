@@ -143,6 +143,18 @@ cat > /opt/benchere/ansible/playbooks/provision_worker.yml <<'PLAYBOOK'
     elbencho_deb: /tmp/elbencho_amd64.deb
 
   tasks:
+    - name: Wait for cloud-init apt/dpkg locks to be released
+      shell: |
+        for i in $(seq 1 150); do
+          if ! fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock >/dev/null 2>&1; then
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "timed out waiting for dpkg/apt locks" >&2
+        exit 1
+      changed_when: false
+
     - name: Copy elbencho deb
       copy:
         src: "{{ elbencho_deb_local }}"
@@ -153,6 +165,7 @@ cat > /opt/benchere/ansible/playbooks/provision_worker.yml <<'PLAYBOOK'
       apt:
         deb: "{{ elbencho_deb }}"
         state: present
+        lock_timeout: 300
 
     - name: Install stress-ng, fio and qemu-guest-agent
       apt:
@@ -162,6 +175,7 @@ cat > /opt/benchere/ansible/playbooks/provision_worker.yml <<'PLAYBOOK'
           - qemu-guest-agent
         state: present
         update_cache: true
+        lock_timeout: 300
 
     - name: Start and enable qemu-guest-agent
       systemd:
