@@ -94,9 +94,16 @@
       </div>
     </section>
 
-    <!-- Charts grid: 2x2 IOPS R/W + BW R/W. Each chart 230px. -->
-    <section class="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
-      <div class="card-flush">
+    <!-- Charts grid: 2x2 IOPS R/W + BW R/W. Charts auto-hide when their
+         side has been zero across the entire visible window, so a read-only
+         profile renders 1 IOPS chart instead of 4 - lighter on the browser
+         and visually less noisy. The grid collapses to 1 column when only
+         one chart is visible. -->
+    <section
+      class="grid gap-2.5"
+      :class="visibleChartsCount > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'"
+    >
+      <div v-if="hasReadActivity" class="card-flush">
         <header class="card-header">
           <span class="card-title">{{ t('jobLive.charts.iopsRead') }}</span>
           <span class="text-xs fg-muted num">{{ wsStore.elbenchoMetrics.history.iopsRead.length }} pts</span>
@@ -110,7 +117,7 @@
           />
         </div>
       </div>
-      <div class="card-flush">
+      <div v-if="hasWriteActivity" class="card-flush">
         <header class="card-header">
           <span class="card-title">{{ t('jobLive.charts.iopsWrite') }}</span>
           <span class="text-xs fg-muted num">{{ wsStore.elbenchoMetrics.history.iopsWrite.length }} pts</span>
@@ -124,7 +131,7 @@
           />
         </div>
       </div>
-      <div class="card-flush">
+      <div v-if="hasReadActivity" class="card-flush">
         <header class="card-header">
           <span class="card-title">{{ t('jobLive.charts.throughputRead') }}</span>
           <span class="text-xs fg-muted num">{{ wsStore.elbenchoMetrics.history.throughputRead.length }} pts</span>
@@ -138,7 +145,7 @@
           />
         </div>
       </div>
-      <div class="card-flush">
+      <div v-if="hasWriteActivity" class="card-flush">
         <header class="card-header">
           <span class="card-title">{{ t('jobLive.charts.throughputWrite') }}</span>
           <span class="text-xs fg-muted num">{{ wsStore.elbenchoMetrics.history.throughputWrite.length }} pts</span>
@@ -210,6 +217,40 @@ const showPhaseStrip = computed(() => {
   const s = job.value?.status
   return s === 'provisioning' || s === 'running'
 })
+
+// Auto-hide a side (read or write) when its history has no signal yet OR
+// stays consistently zero. This keeps the dashboard at 1 chart for mono-
+// directional profiles (rand-4k-write, seq-256k-read, ...) and 4 charts
+// only for mixed profiles. Threshold is "any sample > 0 in the window"
+// so a single non-zero sample brings the chart back.
+//
+// Until at least 3 samples have arrived we show both sides so the user
+// is never staring at an empty page right after the bench starts.
+function sideHasActivity(iopsHistory, bwHistory) {
+  const total = (iopsHistory?.length ?? 0)
+  if (total < 3) return true
+  for (let i = 0; i < total; i++) {
+    if ((iopsHistory[i] || 0) > 0) return true
+    if ((bwHistory[i]   || 0) > 0) return true
+  }
+  return false
+}
+
+const hasReadActivity = computed(() =>
+  sideHasActivity(
+    wsStore.elbenchoMetrics.history.iopsRead,
+    wsStore.elbenchoMetrics.history.throughputRead,
+  )
+)
+const hasWriteActivity = computed(() =>
+  sideHasActivity(
+    wsStore.elbenchoMetrics.history.iopsWrite,
+    wsStore.elbenchoMetrics.history.throughputWrite,
+  )
+)
+const visibleChartsCount = computed(() =>
+  (hasReadActivity.value ? 2 : 0) + (hasWriteActivity.value ? 2 : 0)
+)
 
 // Estimated prefill total = data_disk_gb * num_workers * 10s.
 // Falls back to 0 (PhaseProgress shows elapsed-only) when we cannot infer.

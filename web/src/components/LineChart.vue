@@ -124,6 +124,10 @@ watch(
   [() => props.data, () => props.labels],
   ([newData, newLabels]) => {
     if (!chart) return
+    // Skip Chart.js layout + raster when the tab is in the background.
+    // Chart.js still touches the canvas even with animation: false, which
+    // adds up across 4-5 charts and slows hidden-tab CPU usage.
+    if (typeof document !== 'undefined' && document.hidden) return
     chart.data.datasets[0].data   = [...(newData  ?? [])]
     chart.data.labels             = [...(newLabels ?? [])]
     chart.update('none')
