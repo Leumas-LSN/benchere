@@ -4,11 +4,46 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
+
+// elbenchoServicePort is the default TCP port elbencho --service listens on.
+const elbenchoServicePort = "1611"
+
+// ProbeService TCP-dials the elbencho --service port on every host and
+// returns a single error listing every host that did not respond within
+// timeout. Returns nil when all hosts are reachable. Used as a pre-flight
+// check before prefill so a failed run reports "worker X is unreachable on
+// :1611" instead of an opaque elbencho exit code.
+func ProbeService(ctx context.Context, hosts []string, timeout time.Duration) error {
+	if len(hosts) == 0 {
+		return nil
+	}
+	if timeout <= 0 {
+		timeout = 3 * time.Second
+	}
+	var unreachable []string
+	for _, h := range hosts {
+		addr := net.JoinHostPort(h, elbenchoServicePort)
+		d := net.Dialer{Timeout: timeout}
+		conn, err := d.DialContext(ctx, "tcp", addr)
+		if err != nil {
+			unreachable = append(unreachable, fmt.Sprintf("%s (%v)", h, err))
+			continue
+		}
+		_ = conn.Close()
+	}
+	if len(unreachable) > 0 {
+		return fmt.Errorf("elbencho --service unreachable on %d/%d worker(s): %s",
+			len(unreachable), len(hosts), strings.Join(unreachable, ", "))
+	}
+	return nil
+}
 
 type RunConfig struct {
 	Hosts       []string
@@ -56,8 +91,12 @@ func Run(ctx context.Context, cfg RunConfig) error {
 // v1.10.2 fixed the host factor; v1.10.3 adds the target factor for
 // multi-disk worker configurations.
 //
-// Sequential 1 MiB writes with O_DIRECT, 8 threads, iodepth 16. The
-// backend allocates physical blocks as the writes land.
+// Sequential 1 MiB writes with O_DIRECT, 16 threads, iodepth 16,
+// blockvarpct 100 so the prefilled blocks are non-compressible and
+// non-dedupable - critical for Ceph BlueStore with compression enabled,
+// where prefilling with zeros would let the backend short-circuit reads.
+// Saturating Ceph during prefill on freshly thin-provisioned RBD images
+// also benefits from the higher thread count.
 //
 // outputDir, when non-empty, receives prefill.cmd, prefill.stdout, prefill.stderr.
 func Prefill(ctx context.Context, hosts []string, targets []string, sizeGB int, outputDir string) error {
@@ -71,9 +110,10 @@ func Prefill(ctx context.Context, hosts []string, targets []string, sizeGB int, 
 		"--write",
 		"--block", "1M",
 		"--size", fmt.Sprintf("%dG", totalSizeGB),
-		"--threads", "8",
+		"--threads", "16",
 		"--iodepth", "16",
 		"--direct",
+		"--blockvarpct", "100",
 		"--label", "prefill",
 	}
 	args = append(args, targets...)
