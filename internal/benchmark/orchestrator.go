@@ -545,6 +545,16 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 // elbencho run with TailCSV streaming). Engine selector branches into here
 // when cfg.Engine == "elbencho".
 func (o *Orchestrator) runElbenchoPhase(ctx context.Context, job db.Job, cfg JobConfig, workerIPs []string, artifactDir string) error {
+	// Pre-flight: confirm elbencho --service is reachable on every worker
+	// before launching prefill. The service is started by ansible at the
+	// end of provisioning, but on slow clusters the systemd unit may still
+	// be in "activating" when we get here, and elbencho --hosts fails with
+	// a cryptic exit code if any host is unreachable. A clear error here
+	// points the user at the right log instead of at the prefill output.
+	if err := elbencho.ProbeService(ctx, workerIPs, 5*time.Second); err != nil {
+		return fmt.Errorf("elbencho preflight: %w", err)
+	}
+
 	o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "running", Phase: "prefill"})
 	o.emitProvStep(job.ID, "prefill_start",
 		fmt.Sprintf("Prefill des data disks (%d GB/worker) pour eviter les zero-block reads...", cfg.DataDiskGB), 1.0)
