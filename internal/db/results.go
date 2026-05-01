@@ -8,12 +8,20 @@ func (d *DB) InsertResult(r Result) error {
 		engine = "elbencho"
 	}
 	_, err := d.Exec(
-		`INSERT INTO results(id,job_id,profile_name,engine,timestamp,iops_read,iops_write,
-		throughput_read_mbps,throughput_write_mbps,latency_avg_ms,latency_p99_ms)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+		`INSERT INTO results(
+			id, job_id, profile_name, engine, timestamp,
+			iops_read, iops_write, throughput_read_mbps, throughput_write_mbps,
+			latency_avg_ms, latency_p99_ms,
+			latency_read_avg_ms, latency_write_avg_ms,
+			latency_p50_ms, latency_p95_ms, latency_p999_ms,
+			latency_write_p99_ms
+		) VALUES(?,?,?,?,?, ?,?,?,?, ?,?, ?,?, ?,?,?, ?)`,
 		r.ID, r.JobID, r.ProfileName, engine, r.Timestamp,
 		r.IOPSRead, r.IOPSWrite, r.ThroughputReadMBps, r.ThroughputWriteMBps,
 		r.LatencyAvgMs, r.LatencyP99Ms,
+		r.LatencyReadAvgMs, r.LatencyWriteAvgMs,
+		r.LatencyP50Ms, r.LatencyP95Ms, r.LatencyP999Ms,
+		r.LatencyWriteP99Ms,
 	)
 	return err
 }
@@ -36,8 +44,12 @@ func (d *DB) InsertProxmoxVMSnapshot(s ProxmoxVMSnapshot) error {
 
 func (d *DB) ListResultsByJob(jobID string) ([]Result, error) {
 	rows, err := d.Query(
-		`SELECT id,job_id,profile_name,COALESCE(engine,'elbencho'),timestamp,iops_read,iops_write,
-		throughput_read_mbps,throughput_write_mbps,latency_avg_ms,latency_p99_ms
+		`SELECT id, job_id, profile_name, COALESCE(engine,'elbencho'), timestamp,
+			iops_read, iops_write, throughput_read_mbps, throughput_write_mbps,
+			latency_avg_ms, latency_p99_ms,
+			COALESCE(latency_read_avg_ms, 0), COALESCE(latency_write_avg_ms, 0),
+			COALESCE(latency_p50_ms, 0), COALESCE(latency_p95_ms, 0), COALESCE(latency_p999_ms, 0),
+			COALESCE(latency_write_p99_ms, 0)
 		FROM results WHERE job_id=? ORDER BY timestamp`,
 		jobID,
 	)
@@ -48,9 +60,14 @@ func (d *DB) ListResultsByJob(jobID string) ([]Result, error) {
 	var results []Result
 	for rows.Next() {
 		var r Result
-		if err := rows.Scan(&r.ID, &r.JobID, &r.ProfileName, &r.Engine, &r.Timestamp,
+		if err := rows.Scan(
+			&r.ID, &r.JobID, &r.ProfileName, &r.Engine, &r.Timestamp,
 			&r.IOPSRead, &r.IOPSWrite, &r.ThroughputReadMBps, &r.ThroughputWriteMBps,
-			&r.LatencyAvgMs, &r.LatencyP99Ms); err != nil {
+			&r.LatencyAvgMs, &r.LatencyP99Ms,
+			&r.LatencyReadAvgMs, &r.LatencyWriteAvgMs,
+			&r.LatencyP50Ms, &r.LatencyP95Ms, &r.LatencyP999Ms,
+			&r.LatencyWriteP99Ms,
+		); err != nil {
 			return nil, err
 		}
 		results = append(results, r)

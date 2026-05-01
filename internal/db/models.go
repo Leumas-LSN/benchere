@@ -41,7 +41,16 @@ type Result struct {
 	ThroughputReadMBps  float64
 	ThroughputWriteMBps float64
 	LatencyAvgMs        float64
-	LatencyP99Ms        float64 // 99th percentile latency in milliseconds
+	LatencyP99Ms        float64
+
+	// v2.0.0: extended percentile picture for fio. Zero when engine
+	// does not provide them (elbencho fills only avg + read p99).
+	LatencyReadAvgMs  float64
+	LatencyWriteAvgMs float64
+	LatencyP50Ms      float64
+	LatencyP95Ms      float64
+	LatencyP999Ms     float64
+	LatencyWriteP99Ms float64
 }
 
 type ProxmoxSnapshot struct {
@@ -60,4 +69,28 @@ type ProxmoxVMSnapshot struct {
 	Timestamp time.Time
 	WorkerID  string
 	CPUPct    float64
+}
+
+type PhaseSummary struct {
+	ID                     string
+	JobID                  string
+	ProfileName            string
+	SamplesCount           int
+	IOPSReadAvg            float64
+	IOPSReadMin            float64
+	IOPSReadMax            float64
+	IOPSWriteAvg           float64
+	IOPSWriteMin           float64
+	IOPSWriteMax           float64
+	ThroughputReadMBpsAvg  float64
+	ThroughputReadMBpsMax  float64
+	ThroughputWriteMBpsAvg float64
+	ThroughputWriteMBpsMax float64
+	LatP50Ms               float64
+	LatP95Ms               float64
+	LatP99Ms               float64
+	LatP999Ms              float64
+	LatWriteP99Ms          float64
+	IOPSCVPct              float64 // coefficient of variation = stddev/mean x 100
+	FinishedAt             time.Time
 }
