@@ -1,5 +1,6 @@
 <template>
-  <div class="page-compact space-y-2.5">
+  <div class="page-compact space-y-3">
+    <!-- 1. Header -->
     <header class="flex items-center justify-between gap-4 flex-wrap">
       <div class="flex items-center gap-3 min-w-0">
         <h1 class="text-lg md:text-xl font-semibold tracking-tight fg-primary truncate">{{ job?.name ?? '...' }}</h1>
@@ -32,6 +33,7 @@
       </div>
     </header>
 
+    <!-- 2. Failure banner -->
     <div v-if="job?.status === 'failed'" class="alert-error">
       <Icon name="x_circle" :size="16" class="mt-0.5 shrink-0" />
       <div class="flex-1 min-w-0">
@@ -40,116 +42,100 @@
       </div>
     </div>
 
+    <!-- 3. Phase progress -->
     <PhaseProgress v-if="showPhaseStrip" :prefill-estimated-seconds="prefillEstimatedSeconds" />
 
-    <section class="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-      <div class="kpi-tile">
-        <span class="kpi-label">IOPS Read</span>
-        <span class="kpi-value text-brand-600 dark:text-brand-400">{{ formatIops(wsStore.liveMetrics.iopsRead) }}</span>
-      </div>
-      <div class="kpi-tile">
-        <span class="kpi-label">IOPS Write</span>
-        <span class="kpi-value text-brand-600 dark:text-brand-400">{{ formatIops(wsStore.liveMetrics.iopsWrite) }}</span>
-      </div>
-      <div class="kpi-tile">
-        <span class="kpi-label">Throughput R+W</span>
-        <span class="kpi-value text-sky-600 dark:text-sky-400">
-          {{ ((wsStore.liveMetrics.throughputReadMbps || 0) + (wsStore.liveMetrics.throughputWriteMbps || 0)).toFixed(0) }}
-          <span class="kpi-unit">MB/s</span>
-        </span>
-      </div>
-      <div class="kpi-tile">
-        <span class="kpi-label">Latency p99</span>
-        <span class="kpi-value" :class="(wsStore.liveMetrics.latencyP99Ms||0) > 5 ? 'text-red-600 dark:text-red-400' : 'text-violet-600 dark:text-violet-400'">
-          {{ (wsStore.liveMetrics.latencyP99Ms || 0).toFixed(2) }}
-          <span class="kpi-unit">ms</span>
-        </span>
-      </div>
-    </section>
-
-    <!-- v2.0.5: live ground-truth disk activity from proxmox_vm events.
-         Fio in --client/--server mode buffers status snapshots until the
-         end of each profile, so the four charts below stay flat for
-         minutes at a time. The Proxmox API exposes disk read/write rates
-         per worker every 2s. We sum those across workers and plot them
-         here so the dashboard always shows real activity. -->
-    <section v-if="hasLiveWorkerDisk" class="card-flush">
-      <header class="card-header">
-        <span class="card-title">Activite disque workers (Proxmox-side, live)</span>
-        <span class="text-xs fg-muted num">
-          {{ aggregateWorkerThroughput.read.toFixed(0) }} MB/s read &middot;
-          {{ aggregateWorkerThroughput.write.toFixed(0) }} MB/s write
-        </span>
-      </header>
-      <div class="px-3 pb-2 pt-1.5" style="height: 180px;">
-        <UPlotMulti :series="workerDiskSeries" />
-      </div>
-    </section>
-
-    <section class="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+    <!-- 4. Performance charts. Three side by side on desktop, stack on mobile.
+         Each card carries the current value inline in the header so we no
+         longer need a separate KPI tile row. -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-3">
       <div class="card-flush">
-        <header class="card-header"><span class="card-title">IOPS over time (fio)</span></header>
-        <div class="px-3 pb-2 pt-1.5" style="height: 220px;">
+        <header class="card-header">
+          <span class="card-title">IOPS</span>
+          <span class="num text-xs">
+            <span class="text-orange-500">{{ formatIops(wsStore.liveMetrics.iopsRead) }}<span class="fg-muted ml-0.5">r</span></span>
+            <span class="fg-faint mx-1.5">&#xB7;</span>
+            <span class="text-sky-500">{{ formatIops(wsStore.liveMetrics.iopsWrite) }}<span class="fg-muted ml-0.5">w</span></span>
+          </span>
+        </header>
+        <div class="px-3 pb-2 pt-1.5" style="height: 240px;">
           <UPlotMulti :series="iopsSeries" />
         </div>
       </div>
       <div class="card-flush">
-        <header class="card-header"><span class="card-title">Throughput over time MB/s (fio)</span></header>
-        <div class="px-3 pb-2 pt-1.5" style="height: 220px;">
+        <header class="card-header">
+          <span class="card-title">Throughput (MB/s)</span>
+          <span class="num text-xs">
+            <span class="text-emerald-500">{{ (wsStore.liveMetrics.throughputReadMbps || 0).toFixed(0) }}<span class="fg-muted ml-0.5">r</span></span>
+            <span class="fg-faint mx-1.5">&#xB7;</span>
+            <span class="text-violet-500">{{ (wsStore.liveMetrics.throughputWriteMbps || 0).toFixed(0) }}<span class="fg-muted ml-0.5">w</span></span>
+          </span>
+        </header>
+        <div class="px-3 pb-2 pt-1.5" style="height: 240px;">
           <UPlotMulti :series="bwSeries" />
         </div>
       </div>
       <div class="card-flush">
-        <header class="card-header"><span class="card-title">Latency percentiles ms log (fio)</span></header>
-        <div class="px-3 pb-2 pt-1.5" style="height: 220px;">
+        <header class="card-header">
+          <span class="card-title">Latence (ms, log)</span>
+          <span class="num text-xs">
+            <span class="fg-muted">p99</span>
+            <span :class="p99Tone" class="ml-1.5 font-medium">{{ (wsStore.liveMetrics.latencyP99Ms || 0).toFixed(2) }}</span>
+          </span>
+        </header>
+        <div class="px-3 pb-2 pt-1.5" style="height: 240px;">
           <UPlotMulti :series="latSeries" :log="true" />
         </div>
       </div>
-      <div class="card-flush">
-        <header class="card-header"><span class="card-title">Cluster CPU per node (%)</span></header>
-        <div class="px-3 pb-2 pt-1.5" style="height: 220px;">
-          <UPlotMulti :series="clusterCpuSeries" />
+    </section>
+
+    <!-- 5. Infrastructure: workers + cluster proxmox side by side. -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+      <div v-if="workers.length" class="card-flush lg:col-span-2">
+        <header class="card-header">
+          <span class="card-title">Workers</span>
+          <span class="pill num text-xs">{{ workers.length }}</span>
+        </header>
+        <div class="p-3 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
+          <WorkerLiveTile
+            v-for="(w, i) in workers"
+            :key="w.id"
+            :name="'W' + (i+1) + ' \xB7 ' + ((w.ip||'').split('.').pop() || w.vm_id)"
+            :status="w.status"
+            :cpu="wsStore.workerMetrics[w.id]?.cpuPct || 0"
+            :ram="wsStore.workerMetrics[w.id]?.ramPct || 0"
+            :net-in="wsStore.workerMetrics[w.id]?.netInBps || 0"
+            :net-out="wsStore.workerMetrics[w.id]?.netOutBps || 0"
+            :disk-read="wsStore.workerMetrics[w.id]?.diskReadBps || 0"
+            :disk-write="wsStore.workerMetrics[w.id]?.diskWriteBps || 0"
+            :cpu-history="wsStore.workerMetrics[w.id]?.cpuHistory || []"
+            :saturation="wsStore.workerMetrics[w.id]?.saturation || null"
+          />
+        </div>
+      </div>
+      <div v-if="clusterNodes.length" class="card-flush">
+        <header class="card-header">
+          <span class="card-title">Cluster Proxmox</span>
+          <span class="pill num text-xs">{{ clusterNodes.length }}</span>
+        </header>
+        <div class="p-3 space-y-2">
+          <ClusterLiveCard
+            v-for="n in clusterNodes"
+            :key="n.name"
+            :name="n.name"
+            :cpu="n.cpuPct || 0"
+            :ram="n.ramPct || 0"
+            :load="n.loadAvg || 0"
+            :history="n.history || []"
+          />
         </div>
       </div>
     </section>
 
-    <section v-if="workers.length" class="card-flush">
-      <header class="card-header"><span class="card-title">Workers</span><span class="pill num text-xs">{{ workers.length }}</span></header>
-      <div class="p-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
-        <WorkerLiveTile
-          v-for="(w, i) in workers"
-          :key="w.id"
-          :name="'W' + (i+1) + ' \xB7 ' + ((w.ip||'').split('.').pop() || w.vm_id)"
-          :status="w.status"
-          :cpu="wsStore.workerMetrics[w.id]?.cpuPct || 0"
-          :ram="wsStore.workerMetrics[w.id]?.ramPct || 0"
-          :net-in="wsStore.workerMetrics[w.id]?.netInBps || 0"
-          :net-out="wsStore.workerMetrics[w.id]?.netOutBps || 0"
-          :disk-read="wsStore.workerMetrics[w.id]?.diskReadBps || 0"
-          :disk-write="wsStore.workerMetrics[w.id]?.diskWriteBps || 0"
-          :cpu-history="wsStore.workerMetrics[w.id]?.cpuHistory || []"
-          :saturation="wsStore.workerMetrics[w.id]?.saturation || null"
-        />
-      </div>
-    </section>
-
-    <section v-if="clusterNodes.length" class="card-flush">
-      <header class="card-header"><span class="card-title">Cluster Proxmox</span><span class="pill num text-xs">{{ clusterNodes.length }}</span></header>
-      <div class="p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-        <ClusterLiveCard
-          v-for="n in clusterNodes"
-          :key="n.name"
-          :name="n.name"
-          :cpu="n.cpuPct || 0"
-          :ram="n.ramPct || 0"
-          :load="n.loadAvg || 0"
-          :history="n.history || []"
-        />
-      </div>
-    </section>
-
+    <!-- 6. Live logs (collapsible) -->
     <LiveLogsPanel />
 
+    <!-- 7. Phase summaries strip -->
     <section v-if="wsStore.phaseSummaries.length" class="card-flush">
       <header class="card-header"><span class="card-title">Profils completes</span></header>
       <div class="p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
@@ -195,7 +181,7 @@ const cancelling = ref(false)
 
 const TERMINAL = new Set(['done', 'failed', 'cancelled'])
 
-const isRunning = computed(() => job.value?.status === 'running' || job.value?.status === 'provisioning')
+const isRunning      = computed(() => job.value?.status === 'running' || job.value?.status === 'provisioning')
 const showPhaseStrip = computed(() => isRunning.value)
 
 const iopsSeries = computed(() => [
@@ -211,50 +197,17 @@ const latSeries = computed(() => [
   { label: 'p95', color: '#f59e0b', data: wsStore.liveMetrics.history.latencyP95.slice() },
   { label: 'p99', color: '#ef4444', data: wsStore.liveMetrics.history.latencyP99.slice() },
 ])
-const clusterNodes = computed(() => Object.entries(wsStore.nodeMetrics).map(function(e) { return Object.assign({ name: e[0] }, e[1]) }))
-const palette = ['#f97316', '#10b981', '#0ea5e9', '#a855f7', '#ef4444', '#22d3ee']
-const clusterCpuSeries = computed(() =>
-  clusterNodes.value.map(function(n, i) {
-    return { label: n.name, color: palette[i % palette.length], data: (n.history || []).slice() }
-  })
-)
 
-// Live worker disk aggregate (v2.0.5): sum disk_read_bps and
-// disk_write_bps across all workers from proxmox_vm events. This is a
-// ground-truth signal independent of fio status snapshots, so it stays
-// alive even when fio is buffering its own per-interval output in
-// --client/--server mode.
-const aggregateWorkerThroughput = computed(() => {
-  let read = 0, write = 0
-  for (const w of Object.values(wsStore.workerMetrics)) {
-    read += w.diskReadBps || 0
-    write += w.diskWriteBps || 0
-  }
-  // Convert bytes/s to MB/s using SI MB (1e6) so the number matches what
-  // a Proxmox dashboard or top -i would show.
-  return { read: read / 1e6, write: write / 1e6 }
+const p99Tone = computed(() => {
+  const p = wsStore.liveMetrics.latencyP99Ms || 0
+  if (p > 5)    return 'text-red-600 dark:text-red-400'
+  if (p > 1)    return 'text-amber-600 dark:text-amber-400'
+  return 'text-emerald-600 dark:text-emerald-400'
 })
 
-const workerDiskHistory = ref({ read: [], write: [] })
-const MAX_DISK_HISTORY = 60
-watch(
-  aggregateWorkerThroughput,
-  (val) => {
-    if (val.read === 0 && val.write === 0 && workerDiskHistory.value.read.length === 0) return
-    workerDiskHistory.value.read.push(val.read)
-    workerDiskHistory.value.write.push(val.write)
-    if (workerDiskHistory.value.read.length > MAX_DISK_HISTORY) {
-      workerDiskHistory.value.read.shift()
-      workerDiskHistory.value.write.shift()
-    }
-  },
-  { deep: true },
+const clusterNodes = computed(() =>
+  Object.entries(wsStore.nodeMetrics).map(function(e) { return Object.assign({ name: e[0] }, e[1]) })
 )
-const workerDiskSeries = computed(() => [
-  { label: 'read MB/s',  color: '#10b981', data: workerDiskHistory.value.read.slice()  },
-  { label: 'write MB/s', color: '#a855f7', data: workerDiskHistory.value.write.slice() },
-])
-const hasLiveWorkerDisk = computed(() => Object.keys(wsStore.workerMetrics).length > 0)
 
 const lastSummaries = computed(() => wsStore.phaseSummaries.slice(-3).reverse())
 
@@ -291,10 +244,9 @@ async function pollJob() {
 }
 
 onMounted(async function() {
-  // v2.0.5 Fix C: connect() handles the reset internally (only resets
-  // when jobId changes). Re-navigating to the same job preserves the
-  // accumulated history in liveMetrics so the user does not lose the
-  // chart context.
+  // wsStore.connect() is jobId-aware (v2.0.5): reset is only triggered
+  // when the jobId actually changes, so re-mounting the dashboard for
+  // the same job preserves accumulated history.
   wsStore.connect(jobId)
   await pollJob()
   pollInterval = setInterval(pollJob, 3000)
@@ -309,8 +261,4 @@ onUnmounted(function() {
 <style scoped>
 .page-compact { padding: 0.5rem 1rem 0.75rem; max-width: 1600px; margin: 0 auto; }
 @media (min-width: 1280px) { .page-compact { padding: 0.5rem 1.5rem 0.75rem; } }
-.kpi-tile { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; padding: 0.55rem 0.85rem; border: 1px solid var(--border-subtle); border-radius: 0.5rem; background: var(--surface-base); }
-.kpi-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg-muted); }
-.kpi-value { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; }
-.kpi-unit { font-family: 'Geist', system-ui, sans-serif; font-size: 0.7rem; font-weight: 500; color: var(--fg-muted); margin-left: 0.15rem; }
 </style>

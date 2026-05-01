@@ -761,12 +761,13 @@ func (o *Orchestrator) runFIOPhase(ctx context.Context, job db.Job, cfg JobConfi
 			close(persistDone)
 		}()
 
-		err = fio.Run(ctx, fio.RunConfig{
+		err = fio.RunPerWorker(ctx, fio.PerWorkerRunConfig{
 			Hosts:             workerIPs,
 			Jobfile:           jobfile,
 			Label:             profileName,
 			OutputDir:         artifactDir,
 			StatusIntervalSec: 2,
+			SSHKey:            o.SSHKey,
 		}, fioCh)
 		// fio.Run returned: fioCh is closed. Wait for the converter to
 		// drain it into convertedCh (which it then closes), then for
