@@ -67,21 +67,40 @@
       </div>
     </section>
 
+    <!-- v2.0.5: live ground-truth disk activity from proxmox_vm events.
+         Fio in --client/--server mode buffers status snapshots until the
+         end of each profile, so the four charts below stay flat for
+         minutes at a time. The Proxmox API exposes disk read/write rates
+         per worker every 2s. We sum those across workers and plot them
+         here so the dashboard always shows real activity. -->
+    <section v-if="hasLiveWorkerDisk" class="card-flush">
+      <header class="card-header">
+        <span class="card-title">Activite disque workers (Proxmox-side, live)</span>
+        <span class="text-xs fg-muted num">
+          {{ aggregateWorkerThroughput.read.toFixed(0) }} MB/s read &middot;
+          {{ aggregateWorkerThroughput.write.toFixed(0) }} MB/s write
+        </span>
+      </header>
+      <div class="px-3 pb-2 pt-1.5" style="height: 180px;">
+        <UPlotMulti :series="workerDiskSeries" />
+      </div>
+    </section>
+
     <section class="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
       <div class="card-flush">
-        <header class="card-header"><span class="card-title">IOPS over time</span></header>
+        <header class="card-header"><span class="card-title">IOPS over time (fio)</span></header>
         <div class="px-3 pb-2 pt-1.5" style="height: 220px;">
           <UPlotMulti :series="iopsSeries" />
         </div>
       </div>
       <div class="card-flush">
-        <header class="card-header"><span class="card-title">Throughput over time (MB/s)</span></header>
+        <header class="card-header"><span class="card-title">Throughput over time MB/s (fio)</span></header>
         <div class="px-3 pb-2 pt-1.5" style="height: 220px;">
           <UPlotMulti :series="bwSeries" />
         </div>
       </div>
       <div class="card-flush">
-        <header class="card-header"><span class="card-title">Latency percentiles (ms, log)</span></header>
+        <header class="card-header"><span class="card-title">Latency percentiles ms log (fio)</span></header>
         <div class="px-3 pb-2 pt-1.5" style="height: 220px;">
           <UPlotMulti :series="latSeries" :log="true" />
         </div>
@@ -200,6 +219,43 @@ const clusterCpuSeries = computed(() =>
   })
 )
 
+// Live worker disk aggregate (v2.0.5): sum disk_read_bps and
+// disk_write_bps across all workers from proxmox_vm events. This is a
+// ground-truth signal independent of fio status snapshots, so it stays
+// alive even when fio is buffering its own per-interval output in
+// --client/--server mode.
+const aggregateWorkerThroughput = computed(() => {
+  let read = 0, write = 0
+  for (const w of Object.values(wsStore.workerMetrics)) {
+    read += w.diskReadBps || 0
+    write += w.diskWriteBps || 0
+  }
+  // Convert bytes/s to MB/s using SI MB (1e6) so the number matches what
+  // a Proxmox dashboard or top -i would show.
+  return { read: read / 1e6, write: write / 1e6 }
+})
+
+const workerDiskHistory = ref({ read: [], write: [] })
+const MAX_DISK_HISTORY = 60
+watch(
+  aggregateWorkerThroughput,
+  (val) => {
+    if (val.read === 0 && val.write === 0 && workerDiskHistory.value.read.length === 0) return
+    workerDiskHistory.value.read.push(val.read)
+    workerDiskHistory.value.write.push(val.write)
+    if (workerDiskHistory.value.read.length > MAX_DISK_HISTORY) {
+      workerDiskHistory.value.read.shift()
+      workerDiskHistory.value.write.shift()
+    }
+  },
+  { deep: true },
+)
+const workerDiskSeries = computed(() => [
+  { label: 'read MB/s',  color: '#10b981', data: workerDiskHistory.value.read.slice()  },
+  { label: 'write MB/s', color: '#a855f7', data: workerDiskHistory.value.write.slice() },
+])
+const hasLiveWorkerDisk = computed(() => Object.keys(wsStore.workerMetrics).length > 0)
+
 const lastSummaries = computed(() => wsStore.phaseSummaries.slice(-3).reverse())
 
 const prefillEstimatedSeconds = computed(() => {
@@ -235,7 +291,10 @@ async function pollJob() {
 }
 
 onMounted(async function() {
-  wsStore.reset()
+  // v2.0.5 Fix C: connect() handles the reset internally (only resets
+  // when jobId changes). Re-navigating to the same job preserves the
+  // accumulated history in liveMetrics so the user does not lose the
+  // chart context.
   wsStore.connect(jobId)
   await pollJob()
   pollInterval = setInterval(pollJob, 3000)

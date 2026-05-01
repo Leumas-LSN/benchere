@@ -62,6 +62,14 @@ function build() {
   plot = new uPlot(buildOpts(), buildData(), root.value)
 }
 
+function rebuild() {
+  if (plot) {
+    plot.destroy()
+    plot = null
+  }
+  build()
+}
+
 function update() {
   if (!plot) return
   if (typeof document !== 'undefined' && document.hidden) return
@@ -82,5 +90,20 @@ onBeforeUnmount(() => {
   plot = null
 })
 
-watch(() => props.series.map(s => s.data.length).join(','), update)
+// uPlot fixes the series count at construction time. When the set of
+// series labels changes (a Proxmox node first appears, a new worker
+// reports), we have to destroy the plot and rebuild it. Without this
+// the chart axes render but no curves ever paint. Watching the joined
+// labels catches both additions and renames.
+watch(
+  () => props.series.map(s => s.label).join('|'),
+  () => rebuild(),
+)
+
+// Cheap path: when the data changes but the series count is stable,
+// just push the new data into the existing plot.
+watch(
+  () => props.series.map(s => s.data.length).join(','),
+  () => update(),
+)
 </script>

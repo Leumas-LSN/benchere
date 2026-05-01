@@ -81,8 +81,18 @@ export const useWsStore = defineStore('ws', () => {
     }
   }
 
+  // currentJobId tracks the job whose data is in liveMetrics/history. The
+  // dashboard remounts on every navigation, but if we re-enter the same
+  // job we want to keep what is already in memory instead of zeroing the
+  // charts. Different job (or null): full reset.
+  let currentJobId = null
+
   function connect(jobId) {
     disconnect()
+    if (jobId !== currentJobId) {
+      reset()
+      currentJobId = jobId
+    }
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     socket = new WebSocket(proto + '//' + window.location.host + '/ws')
     socket.onopen  = () => { connected.value = true }
