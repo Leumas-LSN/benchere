@@ -2,96 +2,72 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useWsStore } from './ws.js'
 
-beforeEach(() => {
-  setActivePinia(createPinia())
-})
+describe('useWsStore v2', () => {
+  beforeEach(() => setActivePinia(createPinia()))
 
-describe('_handleEvent — elbencho_metric', () => {
-  it('updates current metrics and appends to history', () => {
-    const store = useWsStore()
-    store._handleEvent({
-      type: 'elbencho_metric',
+  it('handles a storage_metric event', () => {
+    const ws = useWsStore()
+    ws._handleEvent({
+      type: 'storage_metric',
       job_id: 'j1',
       payload: {
-        iops_read: 42000, iops_write: 1000,
-        throughput_read_mbps: 165, throughput_write_mbps: 40,
-        latency_avg_ms: 0.9,
-        profile_name: '4k_70read',
+        engine: 'fio',
+        profile_name: 'oltp-4k-70-30',
+        iops_read: 80000, iops_write: 30000,
+        throughput_read_mbps: 312.5, throughput_write_mbps: 117.2,
+        latency_avg_ms: 0.6, latency_p50_ms: 0.5, latency_p95_ms: 1.2,
+        latency_p99_ms: 2.0, latency_p999_ms: 4.1, latency_write_p99_ms: 1.8,
       },
     })
-    expect(store.elbenchoMetrics.iopsRead).toBe(42000)
-    expect(store.elbenchoMetrics.throughputReadMbps).toBe(165)
-    expect(store.elbenchoMetrics.latencyAvgMs).toBe(0.9)
-    expect(store.elbenchoMetrics.profileName).toBe('4k_70read')
-    expect(store.elbenchoMetrics.history.iopsRead).toHaveLength(1)
-    expect(store.elbenchoMetrics.history.iopsRead[0]).toBe(42000)
+    expect(ws.liveMetrics.engine).toBe('fio')
+    expect(ws.liveMetrics.profileName).toBe('oltp-4k-70-30')
+    expect(ws.liveMetrics.iopsRead).toBe(80000)
+    expect(ws.liveMetrics.latencyP99Ms).toBe(2.0)
+    expect(ws.liveMetrics.history.iopsRead).toEqual([80000])
+    expect(ws.liveMetrics.history.latencyP99).toEqual([2.0])
   })
 
-  it('caps history at 60 points', () => {
-    const store = useWsStore()
-    for (let i = 0; i < 65; i++) {
-      store._handleEvent({
-        type: 'elbencho_metric', job_id: 'j1',
-        payload: { iops_read: i, iops_write: 0, throughput_read_mbps: 0,
-                   throughput_write_mbps: 0, latency_avg_ms: 0, profile_name: '' },
-      })
+  it('caps history to MAX_HISTORY', () => {
+    const ws = useWsStore()
+    for (let i = 0; i < 80; i++) {
+      ws._handleEvent({ type: 'storage_metric', job_id: 'j', payload: { iops_read: i, engine: 'fio', profile_name: 'p' } })
     }
-    expect(store.elbenchoMetrics.history.iopsRead).toHaveLength(60)
-    // Most recent value is 64
-    expect(store.elbenchoMetrics.history.iopsRead[59]).toBe(64)
+    expect(ws.liveMetrics.history.iopsRead.length).toBe(60)
   })
-})
 
-describe('_handleEvent — proxmox_node', () => {
-  it('updates node metrics by name', () => {
-    const store = useWsStore()
-    store._handleEvent({
-      type: 'proxmox_node', job_id: 'j1',
-      payload: { node_name: 'pve-01', cpu_pct: 78, ram_pct: 61, load_avg: 2.4 },
-    })
-    expect(store.nodeMetrics['pve-01'].cpuPct).toBe(78)
-    expect(store.nodeMetrics['pve-01'].ramPct).toBe(61)
+  it('aggregates phase summaries', () => {
+    const ws = useWsStore()
+    ws._handleEvent({ type: 'phase_summary', job_id: 'j', payload: { profile_name: 'oltp', iops_read_avg: 80000, lat_p99_ms: 2.3 } })
+    expect(ws.phaseSummaries[0].profile_name).toBe('oltp')
   })
-})
 
-describe('_handleEvent — proxmox_vm', () => {
-  it('updates worker metrics by id', () => {
-    const store = useWsStore()
-    store._handleEvent({
-      type: 'proxmox_vm', job_id: 'j1',
-      payload: { worker_id: 'w-abc', cpu_pct: 95 },
-    })
-    expect(store.workerMetrics['w-abc'].cpuPct).toBe(95)
+  it('records worker saturation', () => {
+    const ws = useWsStore()
+    ws._handleEvent({ type: 'worker_saturation', job_id: 'j', payload: { worker_id: 'w1', kind: 'cpu', value: 92, threshold: 80 } })
+    expect(ws.workerMetrics['w1'].saturation.kind).toBe('cpu')
   })
-})
 
-describe('_handleEvent — job_status', () => {
-  it('updates job status and phase', () => {
-    const store = useWsStore()
-    store._handleEvent({
-      type: 'job_status', job_id: 'j1',
-      payload: { status: 'running', phase: 'benchmarking' },
-    })
-    expect(store.jobStatus.status).toBe('running')
-    expect(store.jobStatus.phase).toBe('benchmarking')
+  it('updates jobStatus on job_status event', () => {
+    const ws = useWsStore()
+    ws._handleEvent({ type: 'job_status', job_id: 'j', payload: { status: 'running', phase: 'oltp-4k-70-30', runtime_seconds: 300 } })
+    expect(ws.jobStatus.status).toBe('running')
+    expect(ws.jobStatus.phase).toBe('oltp-4k-70-30')
   })
-})
 
-describe('reset', () => {
-  it('clears all metrics state', () => {
-    const store = useWsStore()
-    store._handleEvent({
-      type: 'elbencho_metric', job_id: 'j1',
-      payload: { iops_read: 100, iops_write: 0, throughput_read_mbps: 1, throughput_write_mbps: 0,
-                 latency_avg_ms: 0.1, profile_name: 'test' },
-    })
-    store._handleEvent({
-      type: 'proxmox_node', job_id: 'j1',
-      payload: { node_name: 'pve-01', cpu_pct: 78, ram_pct: 61, load_avg: 2.4 },
-    })
-    store.reset()
-    expect(store.elbenchoMetrics.iopsRead).toBe(0)
-    expect(store.elbenchoMetrics.history.labels).toHaveLength(0)
-    expect(Object.keys(store.nodeMetrics)).toHaveLength(0)
+  it('updates node metrics with history', () => {
+    const ws = useWsStore()
+    ws._handleEvent({ type: 'proxmox_node', job_id: 'j', payload: { node_name: 'pve-01', cpu_pct: 78, ram_pct: 61, load_avg: 2.4 } })
+    expect(ws.nodeMetrics['pve-01'].cpuPct).toBe(78)
+    expect(ws.nodeMetrics['pve-01'].history).toEqual([78])
+  })
+
+  it('reset clears all state', () => {
+    const ws = useWsStore()
+    ws._handleEvent({ type: 'storage_metric', job_id: 'j', payload: { iops_read: 100, engine: 'fio', profile_name: 'p' } })
+    ws._handleEvent({ type: 'proxmox_node', job_id: 'j', payload: { node_name: 'pve-01', cpu_pct: 78, ram_pct: 61, load_avg: 2.4 } })
+    ws.reset()
+    expect(ws.liveMetrics.iopsRead).toBe(0)
+    expect(ws.liveMetrics.history.labels).toHaveLength(0)
+    expect(Object.keys(ws.nodeMetrics)).toHaveLength(0)
   })
 })
