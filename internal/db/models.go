@@ -3,15 +3,22 @@ package db
 import "time"
 
 type Job struct {
-	ID           string     `json:"id"`
-	Name         string     `json:"name"`
-	ClientName   string     `json:"client_name"`
-	Status       string     `json:"status"`
-	Mode         string     `json:"mode"`
-	Engine       string     `json:"engine"`
-	ErrorMessage string     `json:"error_message,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	FinishedAt   *time.Time `json:"finished_at,omitempty"`
+	ID              string     `json:"id"`
+	Name            string     `json:"name"`
+	ClientName      string     `json:"client_name"`
+	Status          string     `json:"status"`
+	Mode            string     `json:"mode"`
+	Engine          string     `json:"engine"`
+	ErrorMessage    string     `json:"error_message,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	FinishedAt      *time.Time `json:"finished_at,omitempty"`
+	// v2.0.0: hardware fields for methodology rendering
+	WorkerCPU       int    `json:"worker_cpu,omitempty"`
+	WorkerRAMMB     int    `json:"worker_ram_mb,omitempty"`
+	DataDisks       int    `json:"data_disks,omitempty"`
+	DataDiskGB      int    `json:"data_disk_gb,omitempty"`
+	StoragePool     string `json:"storage_pool,omitempty"`
+	ProxmoxNodesCSV string `json:"proxmox_nodes_csv,omitempty"`
 }
 
 type Worker struct {

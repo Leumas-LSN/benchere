@@ -8,8 +8,9 @@ func (d *DB) CreateJob(j Job) error {
 		engine = "elbencho"
 	}
 	_, err := d.Exec(
-		"INSERT INTO jobs(id,name,client_name,status,mode,engine,created_at) VALUES(?,?,?,?,?,?,?)",
+		"INSERT INTO jobs(id,name,client_name,status,mode,engine,created_at,worker_cpu,worker_ram_mb,data_disks,data_disk_gb,storage_pool,proxmox_nodes_csv) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
 		j.ID, j.Name, j.ClientName, j.Status, j.Mode, engine, j.CreatedAt,
+		j.WorkerCPU, j.WorkerRAMMB, j.DataDisks, j.DataDiskGB, j.StoragePool, j.ProxmoxNodesCSV,
 	)
 	return err
 }
@@ -34,15 +35,16 @@ func (d *DB) GetJob(id string) (Job, error) {
 	var finishedAt *time.Time
 	var errMsg *string
 	err := d.QueryRow(
-		"SELECT id,name,client_name,status,mode,COALESCE(engine,'elbencho'),created_at,finished_at,COALESCE(error_message,'') FROM jobs WHERE id=?", id,
-	).Scan(&j.ID, &j.Name, &j.ClientName, &j.Status, &j.Mode, &j.Engine, &j.CreatedAt, &finishedAt, &j.ErrorMessage)
+		"SELECT id,name,client_name,status,mode,COALESCE(engine,'elbencho'),created_at,finished_at,COALESCE(error_message,''),COALESCE(worker_cpu,0),COALESCE(worker_ram_mb,0),COALESCE(data_disks,0),COALESCE(data_disk_gb,0),COALESCE(storage_pool,''),COALESCE(proxmox_nodes_csv,'') FROM jobs WHERE id=?", id,
+	).Scan(&j.ID, &j.Name, &j.ClientName, &j.Status, &j.Mode, &j.Engine, &j.CreatedAt, &finishedAt, &j.ErrorMessage,
+		&j.WorkerCPU, &j.WorkerRAMMB, &j.DataDisks, &j.DataDiskGB, &j.StoragePool, &j.ProxmoxNodesCSV)
 	j.FinishedAt = finishedAt
 	_ = errMsg
 	return j, err
 }
 
 func (d *DB) ListJobs() ([]Job, error) {
-	rows, err := d.Query("SELECT id,name,client_name,status,mode,COALESCE(engine,'elbencho'),created_at,finished_at,COALESCE(error_message,'') FROM jobs ORDER BY created_at DESC")
+	rows, err := d.Query("SELECT id,name,client_name,status,mode,COALESCE(engine,'elbencho'),created_at,finished_at,COALESCE(error_message,''),COALESCE(worker_cpu,0),COALESCE(worker_ram_mb,0),COALESCE(data_disks,0),COALESCE(data_disk_gb,0),COALESCE(storage_pool,''),COALESCE(proxmox_nodes_csv,'') FROM jobs ORDER BY created_at DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +53,8 @@ func (d *DB) ListJobs() ([]Job, error) {
 	for rows.Next() {
 		var j Job
 		var finishedAt *time.Time
-		if err := rows.Scan(&j.ID, &j.Name, &j.ClientName, &j.Status, &j.Mode, &j.Engine, &j.CreatedAt, &finishedAt, &j.ErrorMessage); err != nil {
+		if err := rows.Scan(&j.ID, &j.Name, &j.ClientName, &j.Status, &j.Mode, &j.Engine, &j.CreatedAt, &finishedAt, &j.ErrorMessage,
+			&j.WorkerCPU, &j.WorkerRAMMB, &j.DataDisks, &j.DataDiskGB, &j.StoragePool, &j.ProxmoxNodesCSV); err != nil {
 			return nil, err
 		}
 		j.FinishedAt = finishedAt
@@ -78,7 +81,9 @@ func (d *DB) ClearHistory() error {
 // ListActiveJobs retourne les jobs en cours (running ou provisioning).
 func (d *DB) ListActiveJobs() ([]Job, error) {
 	rows, err := d.Query(
-		`SELECT id,name,client_name,status,mode,COALESCE(engine,'elbencho'),created_at,finished_at,COALESCE(error_message,'')
+		`SELECT id,name,client_name,status,mode,COALESCE(engine,'elbencho'),created_at,finished_at,COALESCE(error_message,''),
+		COALESCE(worker_cpu,0),COALESCE(worker_ram_mb,0),COALESCE(data_disks,0),COALESCE(data_disk_gb,0),
+		COALESCE(storage_pool,''),COALESCE(proxmox_nodes_csv,'')
 		 FROM jobs WHERE status IN ('running','provisioning') ORDER BY created_at DESC`,
 	)
 	if err != nil {
@@ -89,7 +94,8 @@ func (d *DB) ListActiveJobs() ([]Job, error) {
 	for rows.Next() {
 		var j Job
 		var finishedAt *time.Time
-		if err := rows.Scan(&j.ID, &j.Name, &j.ClientName, &j.Status, &j.Mode, &j.Engine, &j.CreatedAt, &finishedAt, &j.ErrorMessage); err != nil {
+		if err := rows.Scan(&j.ID, &j.Name, &j.ClientName, &j.Status, &j.Mode, &j.Engine, &j.CreatedAt, &finishedAt, &j.ErrorMessage,
+			&j.WorkerCPU, &j.WorkerRAMMB, &j.DataDisks, &j.DataDiskGB, &j.StoragePool, &j.ProxmoxNodesCSV); err != nil {
 			return nil, err
 		}
 		j.FinishedAt = finishedAt
@@ -101,7 +107,9 @@ func (d *DB) ListActiveJobs() ([]Job, error) {
 // ListRecentJobs retourne les N derniers jobs termines (done/failed/cancelled).
 func (d *DB) ListRecentJobs(n int) ([]Job, error) {
 	rows, err := d.Query(
-		`SELECT id,name,client_name,status,mode,COALESCE(engine,'elbencho'),created_at,finished_at,COALESCE(error_message,'')
+		`SELECT id,name,client_name,status,mode,COALESCE(engine,'elbencho'),created_at,finished_at,COALESCE(error_message,''),
+		COALESCE(worker_cpu,0),COALESCE(worker_ram_mb,0),COALESCE(data_disks,0),COALESCE(data_disk_gb,0),
+		COALESCE(storage_pool,''),COALESCE(proxmox_nodes_csv,'')
 		 FROM jobs WHERE status IN ('done','failed','cancelled')
 		 ORDER BY finished_at DESC LIMIT ?`,
 		n,
@@ -114,7 +122,8 @@ func (d *DB) ListRecentJobs(n int) ([]Job, error) {
 	for rows.Next() {
 		var j Job
 		var finishedAt *time.Time
-		if err := rows.Scan(&j.ID, &j.Name, &j.ClientName, &j.Status, &j.Mode, &j.Engine, &j.CreatedAt, &finishedAt, &j.ErrorMessage); err != nil {
+		if err := rows.Scan(&j.ID, &j.Name, &j.ClientName, &j.Status, &j.Mode, &j.Engine, &j.CreatedAt, &finishedAt, &j.ErrorMessage,
+			&j.WorkerCPU, &j.WorkerRAMMB, &j.DataDisks, &j.DataDiskGB, &j.StoragePool, &j.ProxmoxNodesCSV); err != nil {
 			return nil, err
 		}
 		j.FinishedAt = finishedAt
