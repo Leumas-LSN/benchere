@@ -11,18 +11,19 @@ import (
 )
 
 type settingsPayload struct {
-	ProxmoxURL         string `json:"proxmox_url"`
-	ProxmoxTokenID     string `json:"proxmox_token_id"`
-	ProxmoxTokenSecret string `json:"proxmox_token_secret"`
-	StoragePool        string `json:"storage_pool"`
-	ImageStorage       string `json:"image_storage"`
-	ProxmoxNode        string `json:"proxmox_node"`
-	ClusterName        string `json:"cluster_name"`
-	NetworkBridge      string `json:"network_bridge"`
-	WorkerIPPool       string `json:"worker_ip_pool"`
-	WorkerCIDR         string `json:"worker_cidr"`
-	WorkerGateway      string `json:"worker_gateway"`
-	SSHKeyPath         string `json:"ssh_key_path"`
+	ProxmoxURL           string `json:"proxmox_url"`
+	ProxmoxTokenID       string `json:"proxmox_token_id"`
+	ProxmoxTokenSecret   string `json:"proxmox_token_secret"`
+	StoragePool          string `json:"storage_pool"`
+	ImageStorage         string `json:"image_storage"`
+	ProxmoxNode          string `json:"proxmox_node"`
+	ClusterName          string `json:"cluster_name"`
+	NetworkBridge        string `json:"network_bridge"`
+	WorkerIPPool         string `json:"worker_ip_pool"`
+	WorkerCIDR           string `json:"worker_cidr"`
+	WorkerGateway        string `json:"worker_gateway"`
+	SSHKeyPath           string `json:"ssh_key_path"`
+	EnableLegacyBackends bool   `json:"enable_legacy_backends"`
 }
 
 func splitToken(t string) (id, secret string) {
@@ -33,7 +34,7 @@ func splitToken(t string) (id, secret string) {
 }
 
 func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
-	keys := []string{"proxmox_url", "proxmox_token", "storage_pool", "image_storage", "proxmox_node", "cluster_name", "network_bridge", "worker_ip_pool", "worker_cidr", "worker_gateway", "ssh_key_path"}
+	keys := []string{"proxmox_url", "proxmox_token", "storage_pool", "image_storage", "proxmox_node", "cluster_name", "network_bridge", "worker_ip_pool", "worker_cidr", "worker_gateway", "ssh_key_path", "enable_legacy_backends"}
 	m := make(map[string]string)
 	for _, k := range keys {
 		v, _ := s.DB.GetSetting(k)
@@ -44,8 +45,15 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 	m["proxmox_token_id"] = tokenID
 	m["proxmox_token_secret"] = tokenSecret
 
+	enabled := m["enable_legacy_backends"] == "true"
+	delete(m, "enable_legacy_backends")
+	out := map[string]any{}
+	for k, v := range m {
+		out[k] = v
+	}
+	out["enable_legacy_backends"] = enabled
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(m)
+	json.NewEncoder(w).Encode(out)
 }
 
 func (s *Server) postSettings(w http.ResponseWriter, r *http.Request) {
@@ -88,16 +96,17 @@ func (s *Server) postSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pairs := map[string]string{
-		"proxmox_url":    p.ProxmoxURL,
-		"proxmox_node":   p.ProxmoxNode,
-		"cluster_name":   p.ClusterName,
-		"storage_pool":   p.StoragePool,
-		"image_storage":  p.ImageStorage,
-		"network_bridge": p.NetworkBridge,
-		"worker_ip_pool": p.WorkerIPPool,
-		"worker_cidr":    p.WorkerCIDR,
-		"worker_gateway": p.WorkerGateway,
-		"ssh_key_path":   p.SSHKeyPath,
+		"proxmox_url":          p.ProxmoxURL,
+		"proxmox_node":         p.ProxmoxNode,
+		"cluster_name":         p.ClusterName,
+		"storage_pool":         p.StoragePool,
+		"image_storage":        p.ImageStorage,
+		"network_bridge":       p.NetworkBridge,
+		"worker_ip_pool":       p.WorkerIPPool,
+		"worker_cidr":          p.WorkerCIDR,
+		"worker_gateway":       p.WorkerGateway,
+		"ssh_key_path":         p.SSHKeyPath,
+		"enable_legacy_backends": fmt.Sprintf("%t", p.EnableLegacyBackends),
 	}
 	if token != "" {
 		pairs["proxmox_token"] = token
