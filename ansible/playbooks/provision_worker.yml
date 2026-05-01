@@ -35,21 +35,43 @@
         dest: "{{ elbencho_deb }}"
         mode: '0644'
 
-    - name: Install elbencho
-      apt:
-        deb: "{{ elbencho_deb }}"
-        state: present
-        lock_timeout: 300
+    # The ansible apt module shells out to "dpkg -i" when given deb:, and
+    # "apt-get install" when given name:. dpkg directly does not honor
+    # the lock_timeout option of the apt module: if another process
+    # (typically cloud-inits unattended-upgrades) takes the dpkg frontend
+    # lock between our wait task and this task, dpkg fails immediately
+    # instead of waiting. We bypass the apt module here and call
+    # apt-get install directly with Dpkg::Lock::Timeout=300, which makes
+    # apt-get and dpkg cooperatively wait up to 300s for the lock. We
+    # also wrap with retries as a final safety net.
+    - name: Install elbencho (apt-get with dpkg lock timeout 300s)
+      shell: |
+        set -e
+        DEBIAN_FRONTEND=noninteractive apt-get install -y \
+          -o Dpkg::Options::=--force-confdef \
+          -o Dpkg::Options::=--force-confold \
+          -o Dpkg::Lock::Timeout=300 \
+          {{ elbencho_deb }}
+      register: elb_install
+      changed_when: "'Setting up elbencho' in elb_install.stdout"
+      retries: 3
+      delay: 15
+      until: elb_install is succeeded
 
-    - name: Install stress-ng, fio and qemu-guest-agent
-      apt:
-        name:
-          - stress-ng
-          - fio
-          - qemu-guest-agent
-        state: present
-        update_cache: true
-        lock_timeout: 300
+    - name: Install stress-ng, fio and qemu-guest-agent (apt-get with dpkg lock timeout 300s)
+      shell: |
+        set -e
+        DEBIAN_FRONTEND=noninteractive apt-get update -o Dpkg::Lock::Timeout=300
+        DEBIAN_FRONTEND=noninteractive apt-get install -y \
+          -o Dpkg::Options::=--force-confdef \
+          -o Dpkg::Options::=--force-confold \
+          -o Dpkg::Lock::Timeout=300 \
+          stress-ng fio qemu-guest-agent
+      register: pkgs_install
+      changed_when: "'newly installed' in pkgs_install.stdout"
+      retries: 3
+      delay: 15
+      until: pkgs_install is succeeded
 
     - name: Start and enable qemu-guest-agent
       systemd:
