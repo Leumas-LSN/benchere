@@ -22,7 +22,14 @@ func PollProxmoxMetrics(ctx context.Context, jobID string, pxClient *proxmox.Cli
 		netIn, netOut, diskRead, diskWrite float64
 		ts                                 time.Time
 	}
-	prevs := make(map[string]prev) // worker.ID → previous sample
+	prevs := make(map[string]prev) // worker.ID to previous sample
+
+	type satState struct {
+		cpuStreak int // consecutive samples > 80%
+	}
+	satStates := make(map[string]*satState)
+	const cpuSatThresh = 80.0
+	const cpuSatStreak = 5
 
 	for {
 		select {
@@ -96,6 +103,26 @@ func PollProxmoxMetrics(ctx context.Context, jobID string, pxClient *proxmox.Cli
 						DiskWriteBps: diskWriteBps,
 					}),
 				})
+
+				st, ok := satStates[w.ID]
+				if !ok {
+					st = &satState{}
+					satStates[w.ID] = st
+				}
+				if vmStatus.CPUPct >= cpuSatThresh {
+					st.cpuStreak++
+				} else {
+					st.cpuStreak = 0
+				}
+				if st.cpuStreak == cpuSatStreak {
+					hub.Broadcast(ws.Event{
+						Type:  ws.EventWorkerSaturation,
+						JobID: jobID,
+						Payload: ws.MustMarshal(ws.WorkerSaturationPayload{
+							WorkerID: w.ID, Kind: "cpu", Value: vmStatus.CPUPct, Threshold: cpuSatThresh,
+						}),
+					})
+				}
 			}
 		}
 	}
