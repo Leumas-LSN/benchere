@@ -60,7 +60,7 @@ describe('api error handling', () => {
 
 describe('api.reportPdfUrl', () => {
   it('returns correct URL without fetch', () => {
-    expect(api.reportPdfUrl('job-42')).toBe('/api/jobs/job-42/report.pdf')
+    expect(api.reportPdfUrl('job-42')).toBe('/api/jobs/job-42/report.pdf?lang=fr')
   })
 })
 
