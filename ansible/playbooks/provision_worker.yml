@@ -6,7 +6,18 @@
     elbencho_deb: /tmp/elbencho_amd64.deb
 
   tasks:
-    - name: Wait for cloud-init apt/dpkg locks to be released
+    - name: Wait for cloud-init to finish all boot tasks
+      # cloud-init runs package_update, unattended-upgrades and apt
+      # operations during first boot. Until it reaches the done state,
+      # any apt/dpkg lock taken by ansible races against cloud-init.
+      # cloud-init status --wait blocks until cloud-init is finished,
+      # which is the only reliable way to avoid the dpkg frontend lock.
+      shell: cloud-init status --wait
+      changed_when: false
+      failed_when: false
+      timeout: 600
+
+    - name: Belt and suspenders - wait for any straggling apt/dpkg lock
       shell: |
         for i in $(seq 1 150); do
           if ! fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock >/dev/null 2>&1; then
