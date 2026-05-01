@@ -54,6 +54,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/jobs", s.createJob)
 		r.Get("/jobs/{id}", s.getJob)
 		r.Get("/jobs/{id}/results", s.getJobResults)
+		r.Get("/jobs/{id}/summaries", s.listSummaries)
 		r.Get("/jobs/{id}/results.csv", s.exportJobCSV)
 		r.Get("/jobs/{id}/debug", s.downloadDebug)
 		r.Post("/jobs/{id}/cancel", s.cancelJob)
