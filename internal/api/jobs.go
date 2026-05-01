@@ -278,8 +278,20 @@ func (s *Server) getJobResults(w http.ResponseWriter, r *http.Request) {
 	if len(summaries) > 0 {
 		results := make([]profileResult, 0, len(summaries))
 		for _, sum := range summaries {
+			// Pull engine and the legacy avg latency from the results table.
+			// phase_summaries was kept percentile-only by design, but the API
+			// must surface both for verdict thresholds and CSV export.
+			var engine string
+			var avgLat sql.NullFloat64
+			_ = s.DB.QueryRow(
+				"SELECT COALESCE(MAX(engine),''), AVG(latency_avg_ms) FROM results WHERE job_id=? AND profile_name=?",
+				id, sum.ProfileName,
+			).Scan(&engine, &avgLat)
+			if engine == "" {
+				engine = "fio"
+			}
 			pr := profileResult{
-				ProfileName: sum.ProfileName, Engine: "fio", SamplesCount: sum.SamplesCount,
+				ProfileName: sum.ProfileName, Engine: engine, SamplesCount: sum.SamplesCount,
 				IOPSReadAvg: sum.IOPSReadAvg, IOPSReadMin: sum.IOPSReadMin, IOPSReadMax: sum.IOPSReadMax,
 				IOPSWriteAvg: sum.IOPSWriteAvg, IOPSWriteMin: sum.IOPSWriteMin, IOPSWriteMax: sum.IOPSWriteMax,
 				ThroughputReadMBpsAvg:  sum.ThroughputReadMBpsAvg, ThroughputReadMBpsMax: sum.ThroughputReadMBpsMax,
@@ -288,6 +300,9 @@ func (s *Server) getJobResults(w http.ResponseWriter, r *http.Request) {
 				LatWriteP99Ms: sum.LatWriteP99Ms, IOPSCVPct: sum.IOPSCVPct,
 				MaxIOPSRead: sum.IOPSReadMax, MaxIOPSWrite: sum.IOPSWriteMax,
 				MaxThroughputRead: sum.ThroughputReadMBpsMax, MaxThroughputWrite: sum.ThroughputWriteMBpsMax,
+			}
+			if avgLat.Valid {
+				pr.LatencyAvgMs = avgLat.Float64
 			}
 			results = append(results, pr)
 		}
