@@ -153,6 +153,20 @@
         </div>
       </section>
 
+      <!-- Backends toggle section -->
+      <section class="card space-y-3">
+        <header class="flex items-center justify-between">
+          <h2 class="text-sm font-semibold fg-primary">{{ t('settings.sections.engines') }}</h2>
+        </header>
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input type="checkbox" v-model="form.enable_legacy_backends" class="mt-1 form-check accent-brand-500" />
+          <div class="flex-1">
+            <p class="text-sm fg-primary font-medium">{{ t('settings.fields.enableLegacy') }}</p>
+            <p class="helper">{{ t('settings.fields.enableLegacyHint') }}</p>
+          </div>
+        </label>
+      </section>
+
       <!-- Actions + feedback -->
       <div class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3">
         <button type="button" class="btn-secondary" :disabled="testing" @click="testConnection">
@@ -197,7 +211,8 @@ const form = reactive({
   worker_ip_pool:   '',
   worker_cidr:      '24',
   worker_gateway:   '',
-  ssh_key_path:     '/opt/benchere/id_rsa',
+  ssh_key_path:          '/opt/benchere/id_rsa',
+  enable_legacy_backends: false,
 })
 
 const saving     = ref(false)
@@ -217,7 +232,10 @@ const messageClass = computed(() => isError.value ? 'alert-error' : 'alert-succe
 onMounted(async () => {
   try {
     const s = await settingsStore.load()
-    if (s) Object.assign(form, s)
+    if (s) {
+      Object.assign(form, s)
+      form.enable_legacy_backends = s.enable_legacy_backends === true || s.enable_legacy_backends === 'true'
+    }
   } catch (_) { /* first visit */ }
 })
 

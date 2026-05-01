@@ -258,6 +258,8 @@ export default {
       workerNetworkRight: 'IPs statiques',
       ssh: 'SSH workers',
       sshRight: 'Accès Ansible',
+      engines: 'Backends de benchmark',
+      enginesRight: 'Moteurs disponibles',
     },
     fields: {
       apiUrl: 'URL API Proxmox',
@@ -281,6 +283,8 @@ export default {
       sshKeyPath: 'Chemin de la clé SSH (sur le Master)',
       sshKeyPathHint: 'Clé privée utilisée par Ansible pour se connecter aux workers.',
       workerNetworkLead: "Plage d'IPs assignées aux workers via cloud-init. Évite la dépendance à qemu-guest-agent (souvent absent des images cloud) pour découvrir leur adresse. Laisse vide pour utiliser DHCP + agent (legacy).",
+      enableLegacy: 'Activer les backends historiques (elbencho)',
+      enableLegacyHint: "Quand active, vous pouvez selectionner elbencho comme moteur de benchmark lors de la creation d'un job. Desactivez pour forcer fio (moteur v2.0 par defaut, plus rapide et plus precis).",
     },
     actions: {
       scan: 'Scanner',
