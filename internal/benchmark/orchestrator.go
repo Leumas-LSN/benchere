@@ -81,24 +81,44 @@ func (o *Orchestrator) Run(ctx context.Context, cfg JobConfig) error {
 // ctx.Done can drop buffered metrics. fio in --client mode sends every
 // status snapshot in a tight burst at the end of cmd.Wait, so a premature
 // ctx.Done branch was discarding most of them before they hit the DB.
-func (o *Orchestrator) persistMetrics(ctx context.Context, jobID, profileName, engine string, ch <-chan storageMetric) {
+func (o *Orchestrator) persistMetrics(ctx context.Context, jobID, profileName, engine string, ch <-chan storageMetric, agg *PhaseAggregator) {
 	_ = ctx // retained for signature stability; cancellation is handled upstream
 	for m := range ch {
 		r := db.Result{
 			ID: uuid.NewString(), JobID: jobID, ProfileName: profileName,
 			Engine:    engine,
-			Timestamp: m.Timestamp, IOPSRead: m.IOPSRead, IOPSWrite: m.IOPSWrite,
-			ThroughputReadMBps: m.ThroughputReadMBps, ThroughputWriteMBps: m.ThroughputWriteMBps,
-			LatencyAvgMs: m.LatencyAvgMs, LatencyP99Ms: m.LatencyP99Ms,
+			Timestamp: m.Timestamp,
+			IOPSRead:  m.IOPSRead, IOPSWrite: m.IOPSWrite,
+			ThroughputReadMBps:  m.ThroughputReadMBps,
+			ThroughputWriteMBps: m.ThroughputWriteMBps,
+			LatencyAvgMs:        m.LatencyAvgMs,
+			LatencyP99Ms:        m.LatencyP99Ms,
+			LatencyReadAvgMs:    m.LatencyReadAvgMs,
+			LatencyWriteAvgMs:   m.LatencyWriteAvgMs,
+			LatencyP50Ms:        m.LatencyP50Ms,
+			LatencyP95Ms:        m.LatencyP95Ms,
+			LatencyP999Ms:       m.LatencyP999Ms,
+			LatencyWriteP99Ms:   m.LatencyWriteP99Ms,
 		}
 		_ = o.DB.InsertResult(r)
-		o.emit(jobID, ws.EventElbenchoMetric, ws.ElbenchoMetricPayload{
+		if agg != nil {
+			agg.Push(m)
+		}
+		o.emit(jobID, ws.EventStorageMetric, ws.StorageMetricPayload{
+			Engine:              engine,
 			ProfileName:         profileName,
 			IOPSRead:            m.IOPSRead,
 			IOPSWrite:           m.IOPSWrite,
 			ThroughputReadMBps:  m.ThroughputReadMBps,
 			ThroughputWriteMBps: m.ThroughputWriteMBps,
 			LatencyAvgMs:        m.LatencyAvgMs,
+			LatencyReadAvgMs:    m.LatencyReadAvgMs,
+			LatencyWriteAvgMs:   m.LatencyWriteAvgMs,
+			LatencyP50Ms:        m.LatencyP50Ms,
+			LatencyP95Ms:        m.LatencyP95Ms,
+			LatencyP99Ms:        m.LatencyP99Ms,
+			LatencyP999Ms:       m.LatencyP999Ms,
+			LatencyWriteP99Ms:   m.LatencyWriteP99Ms,
 		})
 	}
 }
@@ -110,8 +130,21 @@ type storageMetric struct {
 	IOPSWrite           float64
 	ThroughputReadMBps  float64
 	ThroughputWriteMBps float64
-	LatencyAvgMs        float64
-	LatencyP99Ms        float64
+
+	// LatencyAvgMs is the legacy single-value field. Filled from the
+	// read-mean for fio (with write-mean as fallback when read is zero)
+	// and from elbencho's only available avg.
+	LatencyAvgMs float64
+
+	// Extended percentile picture (v2.0.0). Zero when not provided by
+	// the engine.
+	LatencyReadAvgMs  float64
+	LatencyWriteAvgMs float64
+	LatencyP50Ms      float64
+	LatencyP95Ms      float64
+	LatencyP99Ms      float64
+	LatencyP999Ms     float64
+	LatencyWriteP99Ms float64
 }
 
 func storageMetricFromElbencho(m elbencho.Metric) storageMetric {
@@ -122,6 +155,7 @@ func storageMetricFromElbencho(m elbencho.Metric) storageMetric {
 		ThroughputReadMBps:  m.ThroughputReadMBps,
 		ThroughputWriteMBps: m.ThroughputWriteMBps,
 		LatencyAvgMs:        m.LatencyAvgMs,
+		LatencyReadAvgMs:    m.LatencyAvgMs,
 	}
 }
 
@@ -133,7 +167,13 @@ func storageMetricFromFio(m fio.Metric) storageMetric {
 		ThroughputReadMBps:  m.ThroughputReadMBps,
 		ThroughputWriteMBps: m.ThroughputWriteMBps,
 		LatencyAvgMs:        m.LatencyAvgMs,
+		LatencyReadAvgMs:    m.LatencyReadAvgMs,
+		LatencyWriteAvgMs:   m.LatencyWriteAvgMs,
+		LatencyP50Ms:        m.LatencyP50Ms,
+		LatencyP95Ms:        m.LatencyP95Ms,
 		LatencyP99Ms:        m.LatencyP99Ms,
+		LatencyP999Ms:       m.LatencyP999Ms,
+		LatencyWriteP99Ms:   m.LatencyWriteP99Ms,
 	}
 }
 
@@ -151,6 +191,17 @@ func (o *Orchestrator) emitProvStep(jobID, step, detail string, progress float64
 	if o.provLog != nil {
 		fmt.Fprintf(o.provLog, "%s %s progress=%.2f %s\n",
 			time.Now().UTC().Format(time.RFC3339), step, progress, detail)
+	}
+}
+
+func (o *Orchestrator) logLine(jobID, source, level, text string) {
+	o.emit(jobID, ws.EventLogLine, ws.LogLinePayload{
+		Source: source, Level: level, Text: text,
+		TS: time.Now().UTC().Format(time.RFC3339),
+	})
+	if o.provLog != nil {
+		fmt.Fprintf(o.provLog, "%s [%s/%s] %s\n",
+			time.Now().UTC().Format(time.RFC3339), source, level, text)
 	}
 }
 
@@ -205,6 +256,7 @@ func jsonMarshalIndent(v interface{}) ([]byte, error) {
 
 func (o *Orchestrator) fail(jobID string, err error) error {
 	log.Printf("[job %s] FAILED: %v", jobID, err)
+	o.logLine(jobID, "system", "error", err.Error())
 	_ = o.DB.FailJob(jobID, err.Error())
 	o.emit(jobID, ws.EventJobStatus, ws.JobStatusPayload{Status: "failed"})
 	return err
@@ -285,6 +337,7 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 	}
 
 	o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "provisioning", Phase: "creating_vms"})
+	o.logLine(job.ID, "orch", "info", fmt.Sprintf("Starting provisioning: %d nodes, %d workers per node, engine=%s", len(cfg.ProxmoxNodes), cfg.WorkersPerNode, cfg.Engine))
 	if err := o.DB.UpdateJobStatus(job.ID, "provisioning"); err != nil {
 		return o.fail(job.ID, err)
 	}
@@ -439,6 +492,7 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 
 	o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "provisioning", Phase: "ansible"})
 	o.emitProvStep(job.ID, "ansible_start", "Deploiement Ansible (elbencho + fio + stress-ng)...", 0.60)
+	o.logLine(job.ID, "orch", "info", fmt.Sprintf("Provisioning %d workers via Ansible", len(workerIPs)))
 	targets := make([]ansible.WorkerTarget, len(workerIPs))
 	for i, ip := range workerIPs {
 		targets[i] = ansible.WorkerTarget{IP: ip}
@@ -456,6 +510,7 @@ func (o *Orchestrator) RunExisting(ctx context.Context, job db.Job, cfg JobConfi
 		}
 		return o.fail(job.ID, fmt.Errorf("ansible: %w\n\n--- ssh -vvv to %s ---\n%s", err, workerIPs[0], diag))
 	}
+	o.logLine(job.ID, "ansible", "info", "Ansible playbook completed successfully")
 	o.emitProvStep(job.ID, "ansible_done", "Ansible termine, verification des workers...", 0.90)
 	for _, w := range createdWorkers {
 		_ = o.DB.UpdateWorkerStatus(w.ID, "ready")
@@ -597,6 +652,8 @@ func (o *Orchestrator) runElbenchoPhase(ctx context.Context, job db.Job, cfg Job
 		liveCSV := filepath.Join(o.OutputDir, fmt.Sprintf("live_%s_%s.csv", job.ID, profileName))
 		finalCSV := filepath.Join(o.OutputDir, fmt.Sprintf("results_%s_%s.csv", job.ID, profileName))
 
+		o.logLine(job.ID, "elbencho", "info", fmt.Sprintf("Starting profile %s (runtime=%ds)", profileName, runtimeSec))
+
 		metricCtx, cancelMetricCtx := context.WithCancel(ctx)
 		elbCh := make(chan elbencho.Metric, 100)
 		convertedCh := make(chan storageMetric, 100)
@@ -607,9 +664,10 @@ func (o *Orchestrator) runElbenchoPhase(ctx context.Context, job db.Job, cfg Job
 				convertedCh <- storageMetricFromElbencho(m)
 			}
 		}()
+		agg := NewPhaseAggregator(profileName)
 		persistDone := make(chan struct{})
 		go func() {
-			o.persistMetrics(metricCtx, job.ID, profileName, "elbencho", convertedCh)
+			o.persistMetrics(metricCtx, job.ID, profileName, "elbencho", convertedCh, agg)
 			close(persistDone)
 		}()
 
@@ -632,6 +690,12 @@ func (o *Orchestrator) runElbenchoPhase(ctx context.Context, job db.Job, cfg Job
 		if err != nil {
 			return err
 		}
+
+		summary := agg.Snapshot(time.Now())
+		_ = o.DB.InsertPhaseSummary(summary.ToDBRecord(uuid.NewString(), job.ID))
+		o.emit(job.ID, ws.EventPhaseSummary, summary.ToWSPayload())
+		o.logLine(job.ID, "elbencho", "info", fmt.Sprintf("Profile %s done: iops_r_avg=%.0f iops_w_avg=%.0f p99=%.2fms cv=%.1f%%",
+			profileName, summary.IOPSReadAvg, summary.IOPSWriteAvg, summary.LatP99Ms, summary.IOPSCVPct))
 	}
 	return nil
 }
@@ -643,6 +707,7 @@ func (o *Orchestrator) runFIOPhase(ctx context.Context, job db.Job, cfg JobConfi
 	o.emit(job.ID, ws.EventJobStatus, ws.JobStatusPayload{Status: "running", Phase: "prefill"})
 	o.emitProvStep(job.ID, "prefill_start",
 		fmt.Sprintf("Prefill fio des data disks (%d GB/disk) pour eviter les zero-block reads...", cfg.DataDiskGB), 1.0)
+	o.logLine(job.ID, "fio", "info", fmt.Sprintf("Starting fio prefill: %d GB per data disk on %d workers", cfg.DataDiskGB, len(workerIPs)))
 	prefillTargets := buildTargets(cfg.DataDisks)
 	prefillStart := time.Now()
 	if err := fio.Prefill(ctx, workerIPs, prefillTargets, cfg.DataDiskGB, artifactDir); err != nil {
@@ -654,6 +719,7 @@ func (o *Orchestrator) runFIOPhase(ctx context.Context, job db.Job, cfg JobConfi
 	if prefillDur < 5*time.Second {
 		log.Printf("[prefill][fio] WARNING: completed too fast, allocation may be incomplete")
 	}
+	o.logLine(job.ID, "fio", "info", fmt.Sprintf("Prefill completed in %s", prefillDur))
 	o.emitProvStep(job.ID, "prefill_done", "Prefill termine, demarrage du benchmark...", 1.0)
 
 	for _, profileName := range cfg.Profiles {
@@ -667,6 +733,8 @@ func (o *Orchestrator) runFIOPhase(ctx context.Context, job db.Job, cfg JobConfi
 			Phase:          profileName,
 			RuntimeSeconds: runtimeSec,
 		})
+
+		o.logLine(job.ID, "fio", "info", fmt.Sprintf("Starting profile %s (runtime=%ds)", profileName, runtimeSec))
 
 		jobfile, err := fio.BuildJobfile(profileName, profile.ConfigJSON, prefillTargets)
 		if err != nil {
@@ -686,9 +754,10 @@ func (o *Orchestrator) runFIOPhase(ctx context.Context, job db.Job, cfg JobConfi
 				convertedCh <- storageMetricFromFio(m)
 			}
 		}()
+		agg := NewPhaseAggregator(profileName)
 		persistDone := make(chan struct{})
 		go func() {
-			o.persistMetrics(metricCtx, job.ID, profileName, "fio", convertedCh)
+			o.persistMetrics(metricCtx, job.ID, profileName, "fio", convertedCh, agg)
 			close(persistDone)
 		}()
 
@@ -708,6 +777,12 @@ func (o *Orchestrator) runFIOPhase(ctx context.Context, job db.Job, cfg JobConfi
 		if err != nil {
 			return err
 		}
+
+		summary := agg.Snapshot(time.Now())
+		_ = o.DB.InsertPhaseSummary(summary.ToDBRecord(uuid.NewString(), job.ID))
+		o.emit(job.ID, ws.EventPhaseSummary, summary.ToWSPayload())
+		o.logLine(job.ID, "fio", "info", fmt.Sprintf("Profile %s done: iops_r_avg=%.0f iops_w_avg=%.0f p99=%.2fms cv=%.1f%%",
+			profileName, summary.IOPSReadAvg, summary.IOPSWriteAvg, summary.LatP99Ms, summary.IOPSCVPct))
 	}
 	return nil
 }

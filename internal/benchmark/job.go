@@ -2,6 +2,7 @@ package benchmark
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Leumas-LSN/benchere/internal/db"
@@ -51,13 +52,19 @@ func NewJob(cfg JobConfig) db.Job {
 		engine = string(EngineFIO)
 	}
 	return db.Job{
-		ID:         uuid.NewString(),
-		Name:       cfg.Name,
-		ClientName: cfg.ClientName,
-		Status:     "pending",
-		Mode:       string(cfg.Mode),
-		Engine:     engine,
-		CreatedAt:  time.Now(),
+		ID:              uuid.NewString(),
+		Name:            cfg.Name,
+		ClientName:      cfg.ClientName,
+		Status:          "pending",
+		Mode:            string(cfg.Mode),
+		Engine:          engine,
+		CreatedAt:       time.Now(),
+		WorkerCPU:       cfg.WorkerCPU,
+		WorkerRAMMB:     cfg.WorkerRAMMB,
+		DataDisks:       cfg.DataDisks,
+		DataDiskGB:      cfg.DataDiskGB,
+		StoragePool:     cfg.StoragePool,
+		ProxmoxNodesCSV: strings.Join(cfg.ProxmoxNodes, ","),
 	}
 }
 

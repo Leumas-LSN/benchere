@@ -16,10 +16,19 @@ type Metric struct {
 	IOPSWrite           float64
 	ThroughputReadMBps  float64
 	ThroughputWriteMBps float64
-	LatencyAvgMs        float64
-	LatencyP50Ms        float64
-	LatencyP95Ms        float64
-	LatencyP99Ms        float64
+
+	// Legacy single-value avg latency, used by the dashboard tile.
+	// Prefers read mean, falls back to write mean when read is zero.
+	LatencyAvgMs float64
+
+	// Read-leg percentile picture from fio clat_ns.percentile.
+	LatencyReadAvgMs  float64
+	LatencyWriteAvgMs float64
+	LatencyP50Ms      float64
+	LatencyP95Ms      float64
+	LatencyP99Ms      float64
+	LatencyP999Ms     float64
+	LatencyWriteP99Ms float64
 }
 
 // rawSnapshot is the subset of fio JSON+ output we care about. Many fields
@@ -77,6 +86,7 @@ type Snapshot struct {
 	LatencyReadP50Ms    float64
 	LatencyReadP95Ms    float64
 	LatencyReadP99Ms    float64
+	LatencyReadP999Ms   float64
 	LatencyWriteP99Ms   float64
 }
 
@@ -202,6 +212,9 @@ func snapshotFromJob(raw rawSnapshot, j rawJob) *Snapshot {
 	if v, ok := j.Read.ClatNS.Percentile["99.000000"]; ok {
 		s.LatencyReadP99Ms = v / 1_000_000.0
 	}
+	if v, ok := j.Read.ClatNS.Percentile["99.900000"]; ok {
+		s.LatencyReadP999Ms = v / 1_000_000.0
+	}
 	if v, ok := j.Write.ClatNS.Percentile["99.000000"]; ok {
 		s.LatencyWriteP99Ms = v / 1_000_000.0
 	}
@@ -216,9 +229,6 @@ func (s *Snapshot) ToMetric(profileName string) Metric {
 	if profileName == "" {
 		profileName = s.JobName
 	}
-	// LatencyAvgMs follows the elbencho convention: prefer the read mean
-	// when present, fall back to write mean. For mixed workloads this is
-	// the predominant signal the user reads on the dashboard tile.
 	avg := s.LatencyReadMeanMs
 	if avg == 0 {
 		avg = s.LatencyWriteMeanMs
@@ -231,8 +241,12 @@ func (s *Snapshot) ToMetric(profileName string) Metric {
 		ThroughputReadMBps:  s.ThroughputReadMBps,
 		ThroughputWriteMBps: s.ThroughputWriteMBps,
 		LatencyAvgMs:        avg,
+		LatencyReadAvgMs:    s.LatencyReadMeanMs,
+		LatencyWriteAvgMs:   s.LatencyWriteMeanMs,
 		LatencyP50Ms:        s.LatencyReadP50Ms,
 		LatencyP95Ms:        s.LatencyReadP95Ms,
 		LatencyP99Ms:        s.LatencyReadP99Ms,
+		LatencyP999Ms:       s.LatencyReadP999Ms,
+		LatencyWriteP99Ms:   s.LatencyWriteP99Ms,
 	}
 }
