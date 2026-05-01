@@ -150,8 +150,8 @@ func TestBuildJobfile_ReplacesTarget(t *testing.T) {
 
 func TestBuildPrefillJobfile_OnePerTarget(t *testing.T) {
 	got := buildPrefillJobfile([]string{"/dev/sda", "/dev/sdb"}, 50)
-	if !strings.Contains(got, "size=50G") {
-		t.Errorf("missing size: %s", got)
+	if !strings.Contains(got, "size=25%") {
+		t.Errorf("missing size=25%% directive: %s", got)
 	}
 	if !strings.Contains(got, "filename=/dev/sda") || !strings.Contains(got, "filename=/dev/sdb") {
 		t.Errorf("missing target: %s", got)

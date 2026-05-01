@@ -17,14 +17,19 @@ import (
 // measure the backend's zero-block fast path rather than real storage.
 //
 // IMPORTANT: fio's --size in --client/--server mode is per-job, per-filename.
-// Setting size=50G in a job means each (client, job, filename) tuple gets
-// 50G. There is NO need to multiply by host count or target count, unlike
-// elbencho whose --size is total across all (host, target) pairs. This
-// makes prefill sizing for fio simpler and more predictable.
+// In v2.0.4 the prefill jobfile uses size=25% with offset_increment=25% so
+// that 4 numjobs split the device into 4 equal stripes and write each
+// stripe once concurrently. fio resolves the percentage locally on every
+// worker against the actual device size at /dev/disk/by-id/..., which means
+// the prefill adapts to whatever data_disk_gb the user picked in NewJob
+// without needing to be passed an explicit byte count.
 //
-// Sequential 1 MiB writes with O_DIRECT, 4 jobs, iodepth 16 per target.
-// outputDir, when non-empty, receives prefill.cmd, prefill.stdout,
-// prefill.stderr, prefill.jobfile, and prefill.hostsfile.
+// Net effect vs the v1.x and v2.0.x prefill (which had every numjob
+// restart at offset 0 and write sizeGB each, producing 4x the necessary
+// write IO): a single full pass over the device, parallelized 4-way,
+// roughly 4x faster on bandwidth-limited backends. The total IO still
+// covers the whole surface so thin allocation, dedup and zero detection
+// are all defeated in one go.
 //
 // Multi-host invocation uses --client=<hostsfile> (one host per line). See
 // the package doc on runner.go for why the comma-separated form does not
@@ -103,19 +108,30 @@ func Prefill(ctx context.Context, hosts []string, targets []string, sizeGB int, 
 }
 
 // buildPrefillJobfile renders one [global] section plus one [prefill_<i>]
-// section per target. Each per-target job writes sizeGB of data sequentially
-// to its filename.
+// section per target.
+//
+// v2.0.4 layout: 4 numjobs split the device into 4 equal stripes via
+// offset_increment=25 percent and size=25 percent. fio resolves the
+// percentage locally on each worker against the actual device size
+// (/dev/disk/by-id/scsi-...), so the prefill adapts transparently to
+// whatever data_disk_gb the operator picks in NewJob (5 GB, 30 GB,
+// 500 GB, 1 TB, anything works).
+//
+// sizeGB is retained for caller-side logging and for legacy callers; the
+// jobfile itself does not embed the byte count anymore.
 func buildPrefillJobfile(targets []string, sizeGB int) string {
+	_ = sizeGB
 	var b strings.Builder
 	b.WriteString("[global]\n")
 	b.WriteString("ioengine=libaio\n")
 	b.WriteString("direct=1\n")
 	b.WriteString("rw=write\n")
 	b.WriteString("bs=1M\n")
-	b.WriteString("iodepth=16\n")
+	b.WriteString("iodepth=32\n")
 	b.WriteString("numjobs=4\n")
+	b.WriteString("offset_increment=25%\n")
+	b.WriteString("size=25%\n")
 	b.WriteString("group_reporting=1\n")
-	b.WriteString(fmt.Sprintf("size=%dG\n", sizeGB))
 	b.WriteString("refill_buffers=1\n")
 	b.WriteString("buffer_compress_percentage=0\n")
 	b.WriteString("\n")
