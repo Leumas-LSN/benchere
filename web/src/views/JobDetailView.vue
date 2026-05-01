@@ -83,9 +83,9 @@
               <td class="text-right num">{{ formatIops(r.iops_write_avg) }} / {{ formatIops(r.iops_write_max) }}</td>
               <td class="text-right num">{{ formatMbps(r.throughput_read_mbps_max) }}</td>
               <td class="text-right num">{{ formatMbps(r.throughput_write_mbps_max) }}</td>
-              <td class="text-right num">{{ formatMs(r.latency_p50_ms) }}</td>
-              <td class="text-right num">{{ formatMs(r.latency_p95_ms) }}</td>
-              <td class="text-right num">{{ formatMs(r.latency_p99_ms) }}</td>
+              <td class="text-right num">{{ formatLatencyP50(r) }}</td>
+              <td class="text-right num">{{ formatLatencyP95(r) }}</td>
+              <td class="text-right num">{{ formatLatencyP99(r) }}</td>
               <td class="text-right num">{{ (r.iops_cv_pct||0).toFixed(1) }}%</td>
               <td class="text-center">
                 <span v-if="verdict(r.profile_name, r) === 'pass'" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30"><Icon name="check" :size="11" />Pass</span>
@@ -164,6 +164,32 @@ function formatIops(n) {
 function formatMbps(n) { return n == null ? 'N/A' : n.toFixed(0) + ' MB/s' }
 function formatMs(n) { return n == null ? 'N/A' : n.toFixed(2) + ' ms' }
 
+// v2.1.1: latency columns adapt to the active leg of the workload. The
+// fio parser only captures p50/p95/p99/p999 on the read leg and p99 on
+// the write leg today, so for write-only profiles the read percentiles
+// are correctly 0 (no read happened) but the user expects to see the
+// write p99. We pick the write percentile when the profile is write-
+// dominant. p50 and p95 stay blank for write-dominant runs until the
+// parser is extended to capture write p50/p95 too (planned for v2.2).
+function isWriteDominant(r) {
+  return (r.iops_write_avg || 0) > (r.iops_read_avg || 0)
+}
+function formatLatencyP50(r) {
+  if (isWriteDominant(r)) return r.latency_write_p50_ms ? r.latency_write_p50_ms.toFixed(2) + ' ms (W)' : 'N/A'
+  return formatMs(r.latency_p50_ms)
+}
+function formatLatencyP95(r) {
+  if (isWriteDominant(r)) return r.latency_write_p95_ms ? r.latency_write_p95_ms.toFixed(2) + ' ms (W)' : 'N/A'
+  return formatMs(r.latency_p95_ms)
+}
+function formatLatencyP99(r) {
+  if (isWriteDominant(r)) {
+    if (r.latency_write_p99_ms) return r.latency_write_p99_ms.toFixed(2) + ' ms (W)'
+    return 'N/A'
+  }
+  return formatMs(r.latency_p99_ms)
+}
+
 function verdict(profileName, r) {
   const prof = profiles.value.find(function(p) { return p.name === profileName })
   if (!prof || !prof.thresholds_json) return null
@@ -173,7 +199,9 @@ function verdict(profileName, r) {
   let pass = true
   if (th.min_iops_read   && (r.iops_read_max  < th.min_iops_read))    pass = false
   if (th.min_iops_write  && (r.iops_write_max < th.min_iops_write))   pass = false
-  if (th.max_p99_latency_ms && (r.latency_p99_ms > th.max_p99_latency_ms)) pass = false
+  // Verdict uses the active-leg p99 too (v2.1.1).
+  const effP99 = isWriteDominant(r) ? (r.latency_write_p99_ms || 0) : (r.latency_p99_ms || 0)
+  if (th.max_p99_latency_ms && effP99 > th.max_p99_latency_ms) pass = false
   if (th.max_avg_latency_ms && (r.latency_avg_ms > th.max_avg_latency_ms)) pass = false
   return pass ? 'pass' : 'fail'
 }
@@ -186,7 +214,8 @@ function failReason(profileName, r) {
   const out = []
   if (th.min_iops_read && r.iops_read_max < th.min_iops_read) out.push('iops_read_max ' + formatIops(r.iops_read_max) + ' < ' + formatIops(th.min_iops_read))
   if (th.min_iops_write && r.iops_write_max < th.min_iops_write) out.push('iops_write_max ' + formatIops(r.iops_write_max) + ' < ' + formatIops(th.min_iops_write))
-  if (th.max_p99_latency_ms && r.latency_p99_ms > th.max_p99_latency_ms) out.push('p99 ' + formatMs(r.latency_p99_ms) + ' > ' + formatMs(th.max_p99_latency_ms))
+  const effP99fail = isWriteDominant(r) ? (r.latency_write_p99_ms || 0) : (r.latency_p99_ms || 0)
+  if (th.max_p99_latency_ms && effP99fail > th.max_p99_latency_ms) out.push('p99 ' + formatMs(effP99fail) + ' > ' + formatMs(th.max_p99_latency_ms))
   if (th.max_avg_latency_ms && r.latency_avg_ms > th.max_avg_latency_ms) out.push('avg ' + formatMs(r.latency_avg_ms) + ' > ' + formatMs(th.max_avg_latency_ms))
   return out.join(' | ')
 }

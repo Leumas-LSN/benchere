@@ -87,7 +87,10 @@ type Snapshot struct {
 	LatencyReadP95Ms    float64
 	LatencyReadP99Ms    float64
 	LatencyReadP999Ms   float64
+	LatencyWriteP50Ms   float64
+	LatencyWriteP95Ms   float64
 	LatencyWriteP99Ms   float64
+	LatencyWriteP999Ms  float64
 }
 
 // ParseStatusSnapshot decodes one fio JSON+ status object (single mode).
@@ -215,8 +218,17 @@ func snapshotFromJob(raw rawSnapshot, j rawJob) *Snapshot {
 	if v, ok := j.Read.ClatNS.Percentile["99.900000"]; ok {
 		s.LatencyReadP999Ms = v / 1_000_000.0
 	}
+	if v, ok := j.Write.ClatNS.Percentile["50.000000"]; ok {
+		s.LatencyWriteP50Ms = v / 1_000_000.0
+	}
+	if v, ok := j.Write.ClatNS.Percentile["95.000000"]; ok {
+		s.LatencyWriteP95Ms = v / 1_000_000.0
+	}
 	if v, ok := j.Write.ClatNS.Percentile["99.000000"]; ok {
 		s.LatencyWriteP99Ms = v / 1_000_000.0
+	}
+	if v, ok := j.Write.ClatNS.Percentile["99.900000"]; ok {
+		s.LatencyWriteP999Ms = v / 1_000_000.0
 	}
 
 	return s

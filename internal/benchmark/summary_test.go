@@ -46,3 +46,32 @@ func TestPhaseAggregator_EmptyIsSafe(t *testing.T) {
 		t.Errorf("expected zero samples on empty aggregator, got %d", s.SamplesCount)
 	}
 }
+
+// TestPhaseAggregator_WriteOnlyCV covers v2.1.1 fix: a write-only profile
+// (rwmixread=0) feeds 0 into iops_read for every sample, so the CV must
+// be computed from iops_write or it falsely shows 0%.
+func TestPhaseAggregator_WriteOnlyCV(t *testing.T) {
+	a := NewPhaseAggregator("peak-write-iops")
+	now := time.Now()
+	a.Push(storageMetric{
+		Timestamp: now, IOPSRead: 0, IOPSWrite: 25000,
+	})
+	a.Push(storageMetric{
+		Timestamp: now.Add(2 * time.Second), IOPSRead: 0, IOPSWrite: 27000,
+	})
+	a.Push(storageMetric{
+		Timestamp: now.Add(4 * time.Second), IOPSRead: 0, IOPSWrite: 29000,
+	})
+	s := a.Snapshot(now.Add(4 * time.Second))
+	if s.IOPSReadAvg != 0 {
+		t.Errorf("IOPSReadAvg=%v want 0", s.IOPSReadAvg)
+	}
+	if s.IOPSWriteAvg != 27000 {
+		t.Errorf("IOPSWriteAvg=%v want 27000", s.IOPSWriteAvg)
+	}
+	// Sample stddev of [25000, 27000, 29000] = 2000, mean = 27000, CV = ~7.4%
+	if s.IOPSCVPct < 6.0 || s.IOPSCVPct > 9.0 {
+		t.Errorf("IOPSCVPct=%v want ~7.4 (computed from iops_write because read leg is empty)", s.IOPSCVPct)
+	}
+}
+

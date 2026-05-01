@@ -90,9 +90,16 @@ func (a *PhaseAggregator) Snapshot(at time.Time) PhaseSnapshot {
 	rTAvg, _, rTMax := stats(a.throughputRead)
 	wTAvg, _, wTMax := stats(a.throughputWrite)
 
+	// CV is computed on the active leg of the workload. For mixed and
+	// read-dominant profiles use iops_read; for write-only profiles
+	// (peak-write-iops, peak-write-bw, latency-write-qd1, backup-256k-write,
+	// or any custom rwmixread=0) iops_read is identically 0 and the CV
+	// must be derived from iops_write or it stays falsely at 0%.
 	cv := 0.0
-	if rAvg > 0 {
+	if rAvg >= wAvg && rAvg > 0 && len(a.iopsRead) > 1 {
 		cv = stddev(a.iopsRead, rAvg) / rAvg * 100
+	} else if wAvg > 0 && len(a.iopsWrite) > 1 {
+		cv = stddev(a.iopsWrite, wAvg) / wAvg * 100
 	}
 
 	return PhaseSnapshot{
