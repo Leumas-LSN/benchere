@@ -205,7 +205,7 @@
       </section>
 
       <!-- Engine selector (storage / mixed only) -->
-      <section v-if="form.mode !== 'cpu'" class="card space-y-4">
+      <section v-if="form.mode !== 'cpu' && legacyEnabled" class="card space-y-4">
         <header class="flex items-center justify-between">
           <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.engine') }}</h2>
           <span class="card-title">{{ t('newJob.engine.label') }}</span>
@@ -361,6 +361,7 @@ const settingsStore = useSettingsStore()
 
 const settings   = ref(null)
 const configured = computed(() => !!settings.value?.proxmox_url)
+const legacyEnabled = computed(() => !!settings.value?.enable_legacy_backends)
 
 const modes = [
   { value: 'storage', icon: 'hard_drive', label: 'Stockage', hint: 'IOPS, débit, latence' },
