@@ -80,16 +80,13 @@ func Run(ctx context.Context, cfg RunConfig) error {
 // disks measure the backend's zero-block fast path (memory-bandwidth
 // speed) instead of real storage performance.
 //
-// IMPORTANT: elbencho's --size in distributed mode (--hosts) is the
-// TOTAL dataset across all (host, target) pairs. With N hosts and M
-// targets per host, --size is split into N*M chunks, one per (host,
-// target) pair. We must therefore set --size to sizeGB * N * M so each
-// individual disk on each worker actually gets sizeGB written to it.
-//
-// Confirmed live with rbd du during a v1.10.0 run: 9 workers x 1 disk
-// x sizeGB=50 with --size 50G allocated only 5.6 GB per disk (= 50/9).
-// v1.10.2 fixed the host factor; v1.10.3 adds the target factor for
-// multi-disk worker configurations.
+// IMPORTANT: elbencho's --size against block devices in --hosts mode is
+// PER-TARGET, PER-HOST (each (host, target) pair writes the full --size
+// independently). Earlier versions of elbencho appeared to split --size
+// across hosts; current upstream (>= 3.0) does not. We pass sizeGB as-is
+// so each worker disk receives exactly sizeGB of writes. Setting --size
+// higher than the detected blockdevice size aborts with
+// "Given size to use is larger than detected blockdevice size".
 //
 // Sequential 1 MiB writes with O_DIRECT, 16 threads, iodepth 16,
 // blockvarpct 100 so the prefilled blocks are non-compressible and
@@ -104,12 +101,11 @@ func Prefill(ctx context.Context, hosts []string, targets []string, sizeGB int, 
 		return fmt.Errorf("prefill: hosts/targets/size required (got hosts=%d targets=%d sizeGB=%d)",
 			len(hosts), len(targets), sizeGB)
 	}
-	totalSizeGB := sizeGB * len(hosts) * len(targets)
 	args := []string{
 		"--hosts", strings.Join(hosts, ","),
 		"--write",
 		"--block", "1M",
-		"--size", fmt.Sprintf("%dG", totalSizeGB),
+		"--size", fmt.Sprintf("%dG", sizeGB),
 		"--threads", "16",
 		"--iodepth", "16",
 		"--direct",
