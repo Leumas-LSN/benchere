@@ -199,6 +199,27 @@ export default {
     wsLive: 'WS live',
     wsInactive: 'WS inactif',
     cancel: 'Annuler le job',
+    header: {
+      wall: 'WALL',
+      profileCounter: '{current}/{total}',
+      bundle: 'Bundle',
+      stop: 'Stop',
+    },
+    profileStrip: {
+      heading: 'Profils',
+      eta: 'ETA total {value}',
+      done: '{count} done',
+      running: '{count} en cours',
+      queued: '{count} en file',
+      statePass: 'Pass',
+      stateRunning: 'En cours',
+      stateQueued: 'En file',
+    },
+    latencyTri: {
+      label: 'Latence',
+    },
+    tendances: 'Tendances',
+    logs: 'Logs',
   },
   jobLive: {
     charts: {
