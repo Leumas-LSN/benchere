@@ -11,7 +11,6 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "chart.js": "^4.4.0",
     "pinia": "^2.1.7",
     "uplot": "1.6.x",
     "vue": "^3.4.0",
