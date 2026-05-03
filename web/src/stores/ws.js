@@ -1,12 +1,22 @@
 import { defineStore } from 'pinia'
 import { ref, reactive, computed } from 'vue'
+import { useJobsStore } from './jobs.js'
 
 const MAX_HISTORY = 60
 const MAX_EVENTS  = 500
 
+// Exponential backoff schedule for WS reconnects, in milliseconds.
+// Doubles up to a 30s ceiling. Resets to the first entry on successful open.
+export const RECONNECT_BACKOFF_MS = [1000, 2000, 4000, 8000, 16000, 30000]
+const TERMINAL_JOB_STATES = new Set(['done', 'failed', 'cancelled'])
+
 export const useWsStore = defineStore('ws', () => {
   let socket = null
+  let reconnectTimer = null
+  let backoffIndex = 0
   const connected = ref(false)
+  const reconnecting = ref(false)
+  const lastEventTs = ref(0)
 
   // Live storage metrics, engine-agnostic. Replaces the old elbenchoMetrics
   // reactive object. Renamed in v2.0.0 along with the WS event.
@@ -87,17 +97,67 @@ export const useWsStore = defineStore('ws', () => {
   // charts. Different job (or null): full reset.
   let currentJobId = null
 
-  function connect(jobId) {
-    disconnect()
-    if (jobId !== currentJobId) {
-      reset()
-      currentJobId = jobId
+  function _isCurrentJobTerminal() {
+    if (!currentJobId) return false
+    // Prefer the local jobStatus we already track from the WS feed: it is
+    // authoritative for the current job and does not require pinia setup.
+    if (jobStatus.status && TERMINAL_JOB_STATES.has(jobStatus.status)) return true
+    try {
+      const store = useJobsStore()
+      const list = (store && store.jobs) ? store.jobs : []
+      const arr = Array.isArray(list) ? list : (list.value || [])
+      const job = arr.find(function(j) { return j && j.id === currentJobId })
+      if (!job) return false
+      return TERMINAL_JOB_STATES.has(job.status)
+    } catch (_) {
+      // If pinia is not active or jobs store not available, default to "not terminal"
+      return false
     }
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    socket = new WebSocket(proto + '//' + window.location.host + '/ws')
-    socket.onopen  = () => { connected.value = true }
-    socket.onclose = () => { connected.value = false }
-    socket.onmessage = (event) => {
+  }
+
+  function _buildWsUrl() {
+    const proto = (typeof window !== 'undefined' && window.location && window.location.protocol === 'https:') ? 'wss:' : 'ws:'
+    const host  = (typeof window !== 'undefined' && window.location && window.location.host) ? window.location.host : 'localhost'
+    let url = proto + '//' + host + '/ws'
+    if (lastEventTs.value > 0) {
+      url += (url.indexOf('?') === -1 ? '?' : '&') + 'since=' + lastEventTs.value
+    }
+    return url
+  }
+
+  function _scheduleReconnect(jobId) {
+    if (_isCurrentJobTerminal()) {
+      reconnecting.value = false
+      return
+    }
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+    const idx = Math.min(backoffIndex, RECONNECT_BACKOFF_MS.length - 1)
+    const delay = RECONNECT_BACKOFF_MS[idx]
+    backoffIndex = idx + 1
+    reconnecting.value = true
+    reconnectTimer = setTimeout(function() {
+      reconnectTimer = null
+      _openSocket(jobId)
+    }, delay)
+  }
+
+  function _openSocket(jobId) {
+    socket = new WebSocket(_buildWsUrl())
+    socket.onopen = function() {
+      connected.value = true
+      reconnecting.value = false
+      backoffIndex = 0
+    }
+    socket.onclose = function() {
+      connected.value = false
+      socket = null
+      // Only auto-reconnect if we still have a current job and it is not terminal.
+      if (currentJobId) _scheduleReconnect(jobId)
+    }
+    socket.onmessage = function(event) {
       try {
         const msg = JSON.parse(event.data)
         if (jobId && msg.job_id !== jobId) return
@@ -106,8 +166,20 @@ export const useWsStore = defineStore('ws', () => {
     }
   }
 
+  function connect(jobId) {
+    disconnect()
+    if (jobId !== currentJobId) {
+      reset()
+      currentJobId = jobId
+    }
+    backoffIndex = 0
+    reconnecting.value = false
+    _openSocket(jobId)
+  }
+
   function _handleEvent(msg) {
     const p = msg.payload
+    lastEventTs.value = Date.now()
     _pushEvent(msg.type, p || {})
     switch (msg.type) {
       case 'storage_metric': {
@@ -191,6 +263,14 @@ export const useWsStore = defineStore('ws', () => {
             profileStartedAt.value = 0
           }
         }
+        // If the job just transitioned to a terminal state, stop trying to reconnect.
+        if (TERMINAL_JOB_STATES.has(jobStatus.status)) {
+          if (reconnectTimer) {
+            clearTimeout(reconnectTimer)
+            reconnectTimer = null
+          }
+          reconnecting.value = false
+        }
         break
       }
       case 'provisioning_step': {
@@ -204,7 +284,18 @@ export const useWsStore = defineStore('ws', () => {
   }
 
   function disconnect() {
-    if (socket) socket.close()
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+    reconnecting.value = false
+    backoffIndex = 0
+    currentJobId = null
+    if (socket) {
+      // Detach onclose first so it does not schedule another reconnect.
+      socket.onclose = null
+      socket.close()
+    }
     socket = null
     connected.value = false
   }
@@ -242,16 +333,26 @@ export const useWsStore = defineStore('ws', () => {
     prefillStartedAt.value = 0
     profileStartedAt.value = 0
     events.value.splice(0)
+    lastEventTs.value = 0
   }
 
   const eventsNewestFirst = computed(function() { return events.value.slice().reverse() })
   const eventCount = computed(function() { return events.value.length })
 
+  // Test-only helpers. Not part of the public store contract but exposed so
+  // unit tests can drive the reconnect logic without owning a real socket.
+  function _hasReconnectTimer() { return reconnectTimer !== null }
+  function _setCurrentJobId(id) { currentJobId = id }
+  function _getBackoffIndex() { return backoffIndex }
+
   return {
-    connected, liveMetrics, nodeMetrics, workerMetrics, phaseSummaries, jobStatus,
+    connected, reconnecting, lastEventTs,
+    liveMetrics, nodeMetrics, workerMetrics, phaseSummaries, jobStatus,
     provSteps, provProgress,
     prefillStartedAt, profileStartedAt,
     events, eventsNewestFirst, eventCount,
-    connect, disconnect, reset, resetProvSteps, _handleEvent,
+    connect, disconnect, reset, resetProvSteps,
+    _handleEvent, _scheduleReconnect, _openSocket,
+    _hasReconnectTimer, _setCurrentJobId, _getBackoffIndex,
   }
 })
