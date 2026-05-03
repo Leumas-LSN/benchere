@@ -28,7 +28,7 @@
       </div>
       <div class="review-row">
         <span class="rl">{{ t('wizard.steps.review.pool') }}</span>
-        <span class="rv num">{{ store.pool || '-' }}</span>
+        <span class="rv num">{{ poolsLabel }}</span>
       </div>
       <div class="review-row">
         <span class="rl">{{ t('wizard.steps.review.nodes') }}</span>
@@ -84,6 +84,11 @@
       </div>
     </section>
 
+    <div v-if="multiPoolJobs > 1" class="alert-info">
+      <Icon name="info" :size="18" class="mt-0.5 shrink-0" />
+      <span>{{ t('wizard.steps.review.multipleJobs', { count: multiPoolJobs }) }}</span>
+    </div>
+
     <div v-if="error" class="alert-error">
       <Icon name="x_circle" :size="18" class="mt-0.5 shrink-0" />
       <span>{{ error }}</span>
@@ -98,7 +103,7 @@
       >
         <Icon v-if="!submitting" name="play" :size="16" />
         <span v-else class="spinner" />
-        {{ submitting ? t('common.loading') : t('wizard.launch') }}
+        {{ submitting ? t('common.loading') : launchLabel }}
       </button>
     </div>
   </div>
@@ -137,12 +142,43 @@ const bytesGB = computed(() => {
   return Math.round(b / (1024 * 1024 * 1024))
 })
 
+// Comma-joined pool list for the Pool review row. Falls back to '-'
+// when no pool is selected (e.g. cpu mode).
+const poolsLabel = computed(() => {
+  const list = store.pools || []
+  return list.length ? list.join(', ') : '-'
+})
+
+// Number of jobs that submit() will create. One per selected pool when
+// the user picked several; one job otherwise.
+const multiPoolJobs = computed(() => {
+  const list = store.pools || []
+  return list.length > 1 ? list.length : 1
+})
+
+const launchLabel = computed(() =>
+  multiPoolJobs.value > 1
+    ? t('wizard.launchMany', { count: multiPoolJobs.value })
+    : t('wizard.launch'),
+)
+
 async function onLaunch() {
   error.value = ''
   submitting.value = true
   try {
-    const id = await store.submit()
-    router.push('/dashboard/' + id)
+    const ids = await store.submit()
+    // Single job: drop the user on the live dashboard for it. Multiple
+    // jobs (one per pool): send to history so they can pick which to
+    // watch, since only one can be foregrounded at a time.
+    const list = Array.isArray(ids) ? ids : (ids ? [ids] : [])
+    if (list.length === 1) {
+      router.push('/dashboard/' + list[0])
+    } else if (list.length > 1) {
+      router.push('/history')
+    } else {
+      error.value = t('wizard.submitError', { msg: 'no job created' })
+      submitting.value = false
+    }
   } catch (e) {
     error.value = t('wizard.submitError', { msg: e.message || String(e) })
     submitting.value = false

@@ -122,7 +122,7 @@ onMounted(() => {
   if (store.loadDraft()) {
     // Only show the banner when there is an actual partial draft, not
     // the bare default state.
-    if (store.type || store.cluster || store.pool || store.profiles.length > 0) {
+    if (store.type || store.cluster || store.pools.length > 0 || store.profiles.length > 0) {
       draftRestored.value = true
     }
   }
@@ -134,7 +134,7 @@ function showToast(msg) {
 }
 
 function onCancel() {
-  const dirty = store.type || store.cluster || store.pool || store.profiles.length > 0
+  const dirty = store.type || store.cluster || store.pools.length > 0 || store.profiles.length > 0
   if (dirty && !confirm(t('wizard.cancelConfirm'))) return
   store.reset()
   router.push('/')

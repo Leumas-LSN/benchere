@@ -11,7 +11,7 @@
         </div>
         <div class="row">
           <span class="row-label">{{ t('wizard.summary.pool') }}</span>
-          <span class="row-value num">{{ store.pool || '-' }}</span>
+          <span class="row-value num">{{ poolsSummary }}</span>
         </div>
         <div class="row">
           <span class="row-label">{{ t('wizard.summary.profiles') }}</span>
@@ -83,6 +83,15 @@ const verdictLabel = computed(() =>
     ? t('wizard.summary.verdictCustom')
     : t('wizard.summary.verdictAuto'),
 )
+
+// Compact summary of selected pools: '-' when none, the single pool
+// name when one, a count when several so the right rail stays narrow.
+const poolsSummary = computed(() => {
+  const list = store.pools || []
+  if (!list.length) return '-'
+  if (list.length === 1) return list[0]
+  return list.length + ' pools'
+})
 
 // Debounce the estimate fetch so typing in workers count does not spam
 // the backend. The wizard fetches on mount and after every relevant

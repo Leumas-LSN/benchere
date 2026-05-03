@@ -380,6 +380,7 @@ export default {
     nextNoLabel: 'Suivant',
     previous: 'Precedent',
     launch: 'Lancer le job',
+    launchMany: 'Lancer les {count} jobs',
     draftRestored: 'Brouillon restaure depuis votre derniere session.',
     draftReset: 'Recommencer',
     draftSaved: 'Brouillon sauvegarde.',
@@ -407,11 +408,12 @@ export default {
       },
       pool: {
         title: 'Pool de stockage',
-        subtitle: 'Selectionne le pool sur lequel le benchmark va ecrire.',
+        subtitle: 'Selectionne un ou plusieurs pools. Un job sera lance par pool selectionne.',
         loading: 'Chargement des pools...',
         empty: 'Aucun pool detecte. Verifie ta configuration Proxmox.',
         capacity: 'Capacite',
         type: 'Type',
+        multiHint: '{count} pools selectionnes. Un job sera cree par pool.',
       },
       profiles: {
         title: 'Profils de bench',
@@ -498,6 +500,7 @@ export default {
         cost: 'Cout estime',
         wallclock: 'Duree wallclock',
         bytes: 'Donnees ecrites',
+        multipleJobs: '{count} jobs vont etre crees, un par pool selectionne. Tu seras redirige vers l Historique au lancement.',
       },
     },
     summary: {

@@ -21,8 +21,8 @@
         :key="p.id"
         type="button"
         class="pool-card"
-        :class="{ 'is-selected': store.pool === p.id }"
-        @click="select(p.id)"
+        :class="{ 'is-selected': store.pools.includes(p.id) }"
+        @click="toggle(p.id)"
       >
         <div class="flex items-center justify-between gap-2">
           <span class="pool-name num">{{ p.id }}</span>
@@ -31,6 +31,10 @@
         <p v-if="p.content" class="pool-meta num">{{ p.content }}</p>
       </button>
     </div>
+
+    <p v-if="store.pools.length > 1" class="multi-pool-hint">
+      {{ t('wizard.steps.pool.multiHint', { count: store.pools.length }) }}
+    </p>
   </div>
 </template>
 
@@ -73,8 +77,13 @@ onMounted(async () => {
   }
 })
 
-function select(id) {
-  store.pool = id
+function toggle(id) {
+  const idx = store.pools.indexOf(id)
+  if (idx >= 0) {
+    store.pools.splice(idx, 1)
+  } else {
+    store.pools.push(id)
+  }
 }
 </script>
 
@@ -137,5 +146,11 @@ function select(id) {
   background: var(--bg-muted);
   color: var(--fg-secondary);
   border: 1px solid var(--border-subtle);
+}
+
+.multi-pool-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--fg-muted);
 }
 </style>

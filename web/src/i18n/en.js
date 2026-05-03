@@ -380,6 +380,7 @@ export default {
     nextNoLabel: 'Next',
     previous: 'Previous',
     launch: 'Launch job',
+    launchMany: 'Launch {count} jobs',
     draftRestored: 'Draft restored from your previous session.',
     draftReset: 'Restart',
     draftSaved: 'Draft saved.',
@@ -407,11 +408,12 @@ export default {
       },
       pool: {
         title: 'Storage pool',
-        subtitle: 'Pick the pool the benchmark will write to.',
+        subtitle: 'Pick one or more pools. One job will be launched per selected pool.',
         loading: 'Loading pools...',
         empty: 'No pool detected. Verify your Proxmox configuration.',
         capacity: 'Capacity',
         type: 'Type',
+        multiHint: '{count} pools selected. One job will be created per pool.',
       },
       profiles: {
         title: 'Benchmark profiles',
@@ -498,6 +500,7 @@ export default {
         cost: 'Estimated cost',
         wallclock: 'Wallclock duration',
         bytes: 'Bytes written',
+        multipleJobs: '{count} jobs will be created, one per selected pool. You will be redirected to History on launch.',
       },
     },
     summary: {

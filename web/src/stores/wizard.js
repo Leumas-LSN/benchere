@@ -63,7 +63,7 @@ function defaultCpuConfig() {
 export const useWizardStore = defineStore('wizard', () => {
   const type = ref('')
   const cluster = ref('')
-  const pool = ref('')
+  const pools = ref([])
   const profiles = ref([])
   const workers = ref(defaultWorkers())
   const range = ref(defaultRange())
@@ -93,7 +93,7 @@ export const useWizardStore = defineStore('wizard', () => {
       switch (key) {
         case 'type': return !!type.value
         case 'cluster': return !!cluster.value
-        case 'pool': return !!pool.value
+        case 'pool': return pools.value.length > 0
         case 'profiles': return profiles.value.length > 0
         case 'workers':
           return workers.value.count > 0 && workers.value.nodes.length > 0
@@ -118,7 +118,10 @@ export const useWizardStore = defineStore('wizard', () => {
       case 'cluster':
         return cluster.value || ''
       case 'pool':
-        return pool.value || ''
+        if (!pools.value.length) return ''
+        return pools.value.length === 1
+          ? pools.value[0]
+          : pools.value.length + ' pools'
       case 'profiles':
         if (!profiles.value.length) return ''
         return profiles.value.length === 1
@@ -175,7 +178,7 @@ export const useWizardStore = defineStore('wizard', () => {
   function reset() {
     type.value = ''
     cluster.value = ''
-    pool.value = ''
+    pools.value = []
     profiles.value = []
     workers.value = defaultWorkers()
     range.value = defaultRange()
@@ -191,7 +194,7 @@ export const useWizardStore = defineStore('wizard', () => {
       const payload = {
         type: type.value,
         cluster: cluster.value,
-        pool: pool.value,
+        pools: pools.value,
         profiles: profiles.value,
         workers: workers.value,
         range: range.value,
@@ -214,7 +217,14 @@ export const useWizardStore = defineStore('wizard', () => {
       if (!data || typeof data !== 'object') return false
       if (typeof data.type === 'string') type.value = data.type
       if (typeof data.cluster === 'string') cluster.value = data.cluster
-      if (typeof data.pool === 'string') pool.value = data.pool
+      // Multi-pool was added after the initial wizard ship. Old drafts
+      // may carry a single string under data.pool; convert to an array
+      // so they keep working transparently.
+      if (Array.isArray(data.pools)) {
+        pools.value = data.pools.slice()
+      } else if (typeof data.pool === 'string' && data.pool) {
+        pools.value = [data.pool]
+      }
       if (Array.isArray(data.profiles)) profiles.value = data.profiles.slice()
       if (data.workers && typeof data.workers === 'object') {
         workers.value = { ...defaultWorkers(), ...data.workers }
@@ -277,11 +287,12 @@ export const useWizardStore = defineStore('wizard', () => {
     }
   }
 
-  // Maps the wizard state to the createJob payload accepted by
-  // /api/jobs. The wizard supports a single pool (the mockup's design
-  // decision); multi-pool is the legacy NewJobView feature and stays
-  // available there until the wizard fully replaces it.
-  function buildJobPayload() {
+  // Maps the wizard state to a createJob payload accepted by /api/jobs
+  // for a SPECIFIC pool. Multi-pool jobs are submitted as N independent
+  // jobs (one per pool) by submit(). When poolName is omitted, defaults
+  // to the first selected pool, which keeps the function callable as
+  // buildJobPayload() in tests and from the review step.
+  function buildJobPayload(poolName) {
     const stress = (type.value === 'cpu' || type.value === 'mixed') ? {
       workers: cpuConfig.value.stressorWorkers || 1,
       timeout: cpuConfig.value.timeoutSec || 60,
@@ -292,9 +303,16 @@ export const useWizardStore = defineStore('wizard', () => {
     // selected nodes by setting workers_per_node = ceil(count / nodes).
     const nodeCount = workers.value.nodes.length || 1
     const perNode = Math.max(1, Math.ceil((workers.value.count || 1) / nodeCount))
+    const targetPool = poolName || pools.value[0] || ''
+    const baseName = meta.value.name || 'benchmark'
+    // When several pools are submitted from one wizard run, suffix the
+    // job name with the pool to keep them distinguishable in history.
+    const jobName = pools.value.length > 1 && targetPool
+      ? baseName + '-' + targetPool
+      : baseName
 
     return {
-      name: meta.value.name || 'benchmark',
+      name: jobName,
       client_name: meta.value.clientName || '',
       mode: type.value || 'storage',
       engine: 'fio',
@@ -305,29 +323,38 @@ export const useWizardStore = defineStore('wizard', () => {
       os_disk_gb: workers.value.osDiskGb || 20,
       data_disks: workers.value.dataDisks || 0,
       data_disk_gb: workers.value.dataDiskGb || 0,
-      storage_pool: pool.value || '',
+      storage_pool: targetPool,
       profiles: type.value === 'cpu' ? [] : profiles.value.slice(),
       stress_config: stress,
     }
   }
 
+  // Submit one job per selected pool (or one job if no pool, e.g. cpu
+  // mode). Returns an array of job IDs in submission order. The caller
+  // decides where to redirect: dashboard/<id> for a single job, history
+  // for several.
   async function submit() {
-    const payload = buildJobPayload()
-    const result = await api.createJob(payload)
+    const targets = pools.value.length ? pools.value.slice() : ['']
+    const ids = []
+    for (const p of targets) {
+      const payload = buildJobPayload(p)
+      const result = await api.createJob(payload)
+      ids.push(result.id)
+    }
     clearDraft()
-    return result.id
+    return ids
   }
 
   // Auto-persist on every change. Use deep watch since most state is
   // nested objects.
   watch(
-    [type, cluster, pool, profiles, workers, range, cpuConfig, currentStep, meta],
+    [type, cluster, pools, profiles, workers, range, cpuConfig, currentStep, meta],
     () => persistDraft(),
     { deep: true },
   )
 
   return {
-    type, cluster, pool, profiles, workers, range, cpuConfig,
+    type, cluster, pools, profiles, workers, range, cpuConfig,
     currentStep, estimate, meta,
     stepKeys, stepKeyAt, totalSteps, stepValid,
     sublabelFor,

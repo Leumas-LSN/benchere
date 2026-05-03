@@ -137,7 +137,9 @@ describe('wizard localStorage persistence', () => {
     expect(data.cluster).toBe('aqua')
   })
 
-  it('loadDraft restores state from localStorage', () => {
+  it('loadDraft restores state from localStorage and migrates legacy single pool', () => {
+    // The first wizard ship serialized a single pool as data.pool string.
+    // loadDraft must migrate that into the new pools array transparently.
     localStorage.setItem('benchere.wizard.draft', JSON.stringify({
       type: 'mixed',
       cluster: 'aqua',
@@ -154,12 +156,22 @@ describe('wizard localStorage persistence', () => {
     expect(w.loadDraft()).toBe(true)
     expect(w.type).toBe('mixed')
     expect(w.cluster).toBe('aqua')
-    expect(w.pool).toBe('ceph-rbd')
+    expect(w.pools).toEqual(['ceph-rbd'])
     expect(w.profiles).toEqual(['oltp-4k-70-30'])
     expect(w.workers.count).toBe(8)
     expect(w.cpuConfig.stressors).toEqual(['cpu', 'vm'])
     expect(w.currentStep).toBe(3)
     expect(w.meta.name).toBe('mybench')
+  })
+
+  it('loadDraft accepts the new pools array format', () => {
+    localStorage.setItem('benchere.wizard.draft', JSON.stringify({
+      type: 'storage',
+      pools: ['ceph-rbd-fast', 'ceph-rbd-cap'],
+    }))
+    const w = useWizardStore()
+    expect(w.loadDraft()).toBe(true)
+    expect(w.pools).toEqual(['ceph-rbd-fast', 'ceph-rbd-cap'])
   })
 
   it('loadDraft returns false when no draft exists', () => {
@@ -216,7 +228,7 @@ describe('wizard buildJobPayload', () => {
     const w = useWizardStore()
     w.type = 'storage'
     w.cluster = 'aqua'
-    w.pool = 'ceph-rbd'
+    w.pools = ['ceph-rbd']
     w.profiles = ['oltp-4k-70-30']
     w.workers.count = 4
     w.workers.nodes = ['node-1', 'node-2']
@@ -235,6 +247,25 @@ describe('wizard buildJobPayload', () => {
     expect(p.storage_pool).toBe('ceph-rbd')
     expect(p.profiles).toEqual(['oltp-4k-70-30'])
     expect(p.stress_config).toBeNull()
+    // Single pool selected: job name is unchanged.
+    expect(p.name).toBe('bench-test')
+  })
+
+  it('multi-pool: buildJobPayload(poolName) suffixes the job name', () => {
+    const w = useWizardStore()
+    w.type = 'storage'
+    w.pools = ['ceph-rbd-fast', 'ceph-rbd-cap']
+    w.profiles = ['oltp-4k-70-30']
+    w.workers.count = 4
+    w.workers.nodes = ['node-1']
+    w.meta.name = 'bench-test'
+
+    const p1 = w.buildJobPayload('ceph-rbd-fast')
+    const p2 = w.buildJobPayload('ceph-rbd-cap')
+    expect(p1.storage_pool).toBe('ceph-rbd-fast')
+    expect(p2.storage_pool).toBe('ceph-rbd-cap')
+    expect(p1.name).toBe('bench-test-ceph-rbd-fast')
+    expect(p2.name).toBe('bench-test-ceph-rbd-cap')
   })
 
   it('cpu mode includes stress_config and empty profiles', () => {
@@ -250,5 +281,32 @@ describe('wizard buildJobPayload', () => {
     expect(p.stress_config).not.toBeNull()
     expect(p.stress_config.stressors).toEqual(['cpu', 'vm'])
     expect(p.stress_config.timeout).toBe(120)
+  })
+})
+
+describe('wizard pool sublabel and validity', () => {
+  it('pool step is invalid when no pool selected', () => {
+    const w = useWizardStore()
+    w.type = 'storage'
+    expect(w.stepValid[2]).toBe(false)
+  })
+
+  it('pool step is valid when at least one pool selected', () => {
+    const w = useWizardStore()
+    w.type = 'storage'
+    w.pools = ['ceph-rbd']
+    expect(w.stepValid[2]).toBe(true)
+  })
+
+  it('sublabel for pool shows single name when one selected', () => {
+    const w = useWizardStore()
+    w.pools = ['ceph-rbd-fast']
+    expect(w.sublabelFor('pool')).toBe('ceph-rbd-fast')
+  })
+
+  it('sublabel for pool shows count when several selected', () => {
+    const w = useWizardStore()
+    w.pools = ['fast', 'cap', 'archive']
+    expect(w.sublabelFor('pool')).toBe('3 pools')
   })
 })
