@@ -79,9 +79,17 @@ describe('WizardSummary', () => {
     const app = makeApp()
     const store = useWizardStore()
     store.cluster = 'aqua-prod'
-    store.pool = 'ceph-rbd'
+    store.pools = ['ceph-rbd']
     const html = await renderToString(app)
     expect(html).toContain('aqua-prod')
     expect(html).toContain('ceph-rbd')
+  })
+
+  it('summarizes pools as a count when several are selected', async () => {
+    const app = makeApp()
+    const store = useWizardStore()
+    store.pools = ['fast', 'cap', 'archive']
+    const html = await renderToString(app)
+    expect(html).toContain('3 pools')
   })
 })
