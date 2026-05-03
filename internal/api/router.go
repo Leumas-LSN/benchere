@@ -52,6 +52,7 @@ func (s *Server) Router() http.Handler {
 		r.Get("/proxmox/bridges", s.getBridges)
 		r.Get("/jobs", s.listJobs)
 		r.Post("/jobs", s.createJob)
+		r.Post("/jobs/estimate", s.estimateJob)
 		r.Get("/jobs/{id}", s.getJob)
 		r.Get("/jobs/{id}/results", s.getJobResults)
 		r.Get("/jobs/{id}/summaries", s.listSummaries)
