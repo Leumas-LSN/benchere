@@ -38,11 +38,14 @@
         </button>
         <button
           type="button"
-          class="mode-card flex-1"
-          :class="{ 'is-selected': store.range.thresholdsCustom }"
-          @click="store.range.thresholdsCustom = true"
+          class="mode-card flex-1 is-disabled"
+          disabled
+          :title="t('common.comingSoon')"
         >
-          <span class="mode-card-label">{{ t('wizard.steps.range.verdictCustom') }}</span>
+          <span class="mode-card-header">
+            <span class="mode-card-label">{{ t('wizard.steps.range.verdictCustom') }}</span>
+            <span class="coming-soon-pill">{{ t('common.comingSoon') }}</span>
+          </span>
           <span class="mode-card-hint">{{ t('wizard.steps.range.verdictCustomHint') }}</span>
         </button>
       </div>
@@ -122,10 +125,40 @@ const stepEyebrow = computed(() =>
   background: var(--bg-brand-soft);
 }
 
+.mode-card.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mode-card.is-disabled:hover {
+  border-color: var(--border-default);
+  background: var(--bg-elevated);
+}
+
+.mode-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
 .mode-card-label {
   font-size: 14px;
   font-weight: 600;
   color: var(--fg-primary);
+}
+
+.coming-soon-pill {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-muted);
+  color: var(--fg-muted);
+  border: 1px solid var(--border-subtle);
 }
 
 .mode-card-hint {
