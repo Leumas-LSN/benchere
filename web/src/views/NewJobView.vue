@@ -1,557 +1,254 @@
 <template>
-  <div class="page max-w-4xl">
-    <PageHeader
-      :eyebrow="t('newJob.eyebrow')"
-      :title="t('newJob.title')"
-      :description="t('newJob.description')"
-    />
-
-    <!-- Onboarding -->
-    <div v-if="!configured" class="alert-warn mb-6">
-      <Icon name="alert" :size="18" class="mt-0.5 shrink-0" />
-      <div class="flex-1">
-        <p class="font-semibold">{{ t('notConfigured.title') }}</p>
-        <p class="mt-0.5 opacity-80">
-          {{ t('notConfigured.hint') }}
-        </p>
+  <div class="wizard-shell">
+    <header class="wizard-topbar">
+      <div class="flex items-center gap-3">
+        <RouterLink to="/" class="benchere-link">
+          <BenchereWordmark size="sm" />
+        </RouterLink>
+        <span class="breadcrumb">
+          <Icon name="chevron_right" :size="14" class="breadcrumb-sep" />
+          <span class="breadcrumb-text">{{ t('wizard.title') }} - {{ t('wizard.draft') }}</span>
+        </span>
       </div>
-      <RouterLink to="/settings" class="btn-sm btn inline-flex bg-white text-amber-800 hover:bg-amber-50 border border-amber-300 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700/50">
-        Configurer
-        <Icon name="arrow_right" :size="14" />
-      </RouterLink>
-    </div>
-
-    <form @submit.prevent="submit" class="space-y-6">
-      <!-- Identification -->
-      <section class="card space-y-5">
-        <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.identification') }}</h2>
-          <span class="card-title">Étape 1 / 4</span>
-        </header>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="label">{{ t('newJob.fields.jobName') }}</label>
-            <input v-model="form.name" type="text" placeholder="benchmark-prod-01" class="input" required />
-          </div>
-          <div>
-            <label class="label">{{ t('newJob.fields.clientName') }}</label>
-            <input v-model="form.client_name" type="text" placeholder="Acme Corp" class="input" required />
-          </div>
-        </div>
-      </section>
-
-      <!-- Proxmox nodes -->
-      <section class="card space-y-4">
-        <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.nodes') }}</h2>
-          <span class="card-title">Étape 2 / 5</span>
-        </header>
-        <div class="flex items-center justify-between">
-          <p class="helper">{{ t('newJob.nodes.hint') }}</p>
-          <button
-            v-if="availableNodes.length > 0"
-            type="button"
-            class="text-xs text-brand-600 dark:text-brand-400 hover:underline"
-            @click="toggleAllNodes"
-          >
-            {{ allNodesSelected ? t('newJob.nodes.deselectAll') : t('newJob.nodes.allNodes') }}
-          </button>
-        </div>
-        <div v-if="nodesLoading" class="text-sm fg-muted">{{ t('newJob.nodes.loading') }}</div>
-        <div v-else-if="!availableNodes.length" class="text-sm fg-muted">{{ t('newJob.nodes.empty') }}</div>
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <label
-            v-for="n in availableNodes"
-            :key="n.name"
-            :class="[
-              'flex items-center gap-3 cursor-pointer rounded-lg border p-3 transition-colors',
-              selectedNodes.includes(n.name)
-                ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/10'
-                : 'border-default hover:border-strong'
-            ]"
-          >
-            <input type="checkbox" :value="n.name" v-model="selectedNodes" class="sr-only peer" />
-            <span
-              :class="[
-                'w-4 h-4 rounded flex items-center justify-center shrink-0 transition-all',
-                selectedNodes.includes(n.name)
-                  ? 'bg-brand-500 text-white'
-                  : 'border border-default bg-elevated'
-              ]"
-            >
-              <Icon v-if="selectedNodes.includes(n.name)" name="check" :size="11" stroke-width="3" />
-            </span>
-            <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium fg-primary truncate font-mono">{{ n.name }}</p>
-              <p class="text-xs fg-muted">CPU {{ n.cpu_pct.toFixed(1) }}% &middot; RAM {{ n.ram_pct.toFixed(0) }}%</p>
-            </div>
-          </label>
-        </div>
-        <p v-if="selectedNodes.length > 0 && form.workers_per_node > 0" class="text-xs fg-muted">
-          {{ t('newJob.nodes.totalHelper', { total: totalWorkers, perNode: form.workers_per_node, nodes: selectedNodes.length }) }}
-        </p>
-      </section>
-
-      <!-- Storage pools -->
-      <section class="card space-y-4">
-        <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.storage') }}</h2>
-          <span class="card-title">Étape 3 / 5</span>
-        </header>
-        <p class="helper">{{ t('newJob.storage.hint') }}</p>
-        <div v-if="storagesLoading" class="text-sm fg-muted">{{ t('newJob.storage.loading') }}</div>
-        <div v-else-if="storagesError" class="text-sm text-red-600 dark:text-red-400">{{ storagesError }}</div>
-        <div v-else-if="!availableStorages.length" class="text-sm fg-muted">{{ t('newJob.storage.empty') }}</div>
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <label
-            v-for="s in availableStorages"
-            :key="s.id"
-            :class="[
-              'flex items-center gap-3 cursor-pointer rounded-lg border p-3 transition-colors',
-              form.storage_pools.includes(s.id)
-                ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/10'
-                : 'border-default hover:border-strong'
-            ]"
-          >
-            <input type="checkbox" :value="s.id" v-model="form.storage_pools" class="sr-only peer" />
-            <span
-              :class="[
-                'w-4 h-4 rounded flex items-center justify-center shrink-0 transition-all',
-                form.storage_pools.includes(s.id)
-                  ? 'bg-brand-500 text-white'
-                  : 'border border-default bg-elevated'
-              ]"
-            >
-              <Icon v-if="form.storage_pools.includes(s.id)" name="check" :size="11" stroke-width="3" />
-            </span>
-            <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium fg-primary truncate">{{ s.id }}</p>
-              <p class="text-xs fg-muted">{{ s.type }}</p>
-            </div>
-          </label>
-        </div>
-      </section>
-
-      <!-- Workers -->
-      <section class="card space-y-5">
-        <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.workers') }}</h2>
-          <span class="card-title">Étape 4 / 5</span>
-        </header>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label class="label">{{ t('newJob.fields.workersPerNode') }}</label>
-            <input v-model.number="form.workers_per_node" type="number" min="1" max="20" class="input" required />
-          </div>
-          <div>
-            <label class="label">{{ t('newJob.fields.vcpu') }}</label>
-            <input v-model.number="form.worker_cpu" type="number" min="1" max="64" class="input" required />
-          </div>
-          <div>
-            <label class="label">{{ t('newJob.fields.ram') }}</label>
-            <input v-model.number="form.worker_ram_mb" type="number" min="512" class="input" required />
-          </div>
-          <div>
-            <label class="label">{{ t('newJob.fields.osDisk') }}</label>
-            <input v-model.number="form.os_disk_gb" type="number" min="10" class="input" required />
-          </div>
-          <div>
-            <label class="label">{{ t('newJob.fields.dataDisks') }}</label>
-            <input v-model.number="form.data_disks" type="number" min="0" max="8" class="input" />
-          </div>
-          <div>
-            <label class="label">{{ t('newJob.fields.dataDiskSize') }}</label>
-            <input v-model.number="form.data_disk_gb" type="number" min="1" class="input" />
-          </div>
-        </div>
-      </section>
-
-      <!-- Mode -->
-      <section class="card space-y-5">
-        <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.mode') }}</h2>
-          <span class="card-title">Étape 5 / 5</span>
-        </header>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <label
-            v-for="mode in modes"
-            :key="mode.value"
-            :class="[
-              'group cursor-pointer rounded-xl border p-4 transition-all duration-150',
-              form.mode === mode.value
-                ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/10 shadow-brand'
-                : 'border-default hover:border-strong hover:bg-soft'
-            ]"
-          >
-            <input type="radio" v-model="form.mode" :value="mode.value" class="sr-only" />
-            <div class="flex items-start gap-3">
-              <span
-                :class="[
-                  'w-9 h-9 rounded-lg flex items-center justify-center shrink-0',
-                  form.mode === mode.value
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-soft fg-secondary'
-                ]"
-              >
-                <Icon :name="mode.icon" :size="18" />
-              </span>
-              <div class="min-w-0">
-                <p class="text-sm font-semibold fg-primary">{{ mode.label }}</p>
-                <p class="text-xs fg-muted mt-0.5">{{ mode.hint }}</p>
-              </div>
-            </div>
-          </label>
-        </div>
-      </section>
-
-      <!-- Engine selector (storage / mixed only) -->
-      <section v-if="form.mode !== 'cpu' && legacyEnabled" class="card space-y-4">
-        <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.engine') }}</h2>
-          <span class="card-title">{{ t('newJob.engine.label') }}</span>
-        </header>
-        <p class="helper">{{ t('newJob.engine.help') }}</p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label
-            v-for="opt in engineOptions"
-            :key="opt.value"
-            :class="[
-              'group cursor-pointer rounded-xl border p-4 transition-all duration-150',
-              form.engine === opt.value
-                ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/10 shadow-brand'
-                : 'border-default hover:border-strong hover:bg-soft'
-            ]"
-          >
-            <input type="radio" v-model="form.engine" :value="opt.value" class="sr-only" />
-            <div class="flex items-start gap-3">
-              <span
-                :class="[
-                  'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 font-mono text-xs font-bold',
-                  form.engine === opt.value
-                    ? 'bg-brand-500 text-white'
-                    : 'bg-soft fg-secondary'
-                ]"
-              >
-                {{ opt.value }}
-              </span>
-              <div class="min-w-0">
-                <p class="text-sm font-semibold fg-primary">{{ opt.label }}</p>
-                <p class="text-xs fg-muted mt-0.5">{{ opt.hint }}</p>
-              </div>
-            </div>
-          </label>
-        </div>
-      </section>
-
-      <!-- Profiles -->
-      <section v-if="form.mode !== 'cpu'" class="card space-y-4">
-        <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.profiles') }}</h2>
-          <span class="card-title">Étape 4 / 4 · Stockage</span>
-        </header>
-        <div v-if="filteredProfiles.length === 0" class="text-sm fg-muted">{{ t('newJob.profilesLoading') }}</div>
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <label
-            v-for="p in filteredProfiles"
-            :key="p.id"
-            :class="[
-              'flex items-start gap-3 cursor-pointer rounded-lg border p-3 transition-colors',
-              form.profiles.includes(p.name)
-                ? 'border-brand-500 bg-brand-50 dark:bg-brand-500/10'
-                : 'border-default hover:border-strong'
-            ]"
-          >
-            <input
-              type="checkbox"
-              :value="p.name"
-              v-model="form.profiles"
-              class="sr-only peer"
-            />
-            <span
-              :class="[
-                'w-4 h-4 rounded flex items-center justify-center shrink-0 mt-0.5 transition-all',
-                form.profiles.includes(p.name)
-                  ? 'bg-brand-500 text-white'
-                  : 'border border-default bg-elevated'
-              ]"
-            >
-              <Icon v-if="form.profiles.includes(p.name)" name="check" :size="11" stroke-width="3" />
-            </span>
-            <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium fg-primary truncate">{{ p.name }}</p>
-              <p v-if="p.description" class="text-xs fg-muted truncate">{{ p.description }}</p>
-            </div>
-          </label>
-        </div>
-      </section>
-
-      <!-- stress-ng -->
-      <section v-if="form.mode !== 'storage'" class="card space-y-5">
-        <header class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold fg-primary">{{ t('newJob.sections.stress') }}</h2>
-          <span class="card-title">Étape 4 / 4 · CPU</span>
-        </header>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="label">{{ t('newJob.fields.stressWorkers') }}</label>
-            <input v-model.number="form.stress_config.workers" type="number" min="1" class="input" />
-          </div>
-          <div>
-            <label class="label">{{ t('newJob.fields.stressTimeout') }}</label>
-            <input v-model.number="form.stress_config.timeout" type="number" min="10" class="input" />
-          </div>
-        </div>
-        <div>
-          <label class="label">{{ t('newJob.fields.stressors') }}</label>
-          <div class="flex flex-wrap gap-2 mt-1">
-            <label
-              v-for="s in stressors"
-              :key="s"
-              :class="[
-                'cursor-pointer text-xs px-3 h-8 inline-flex items-center gap-2 rounded-md border transition-colors',
-                form.stress_config.stressors.includes(s)
-                  ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
-                  : 'border-default fg-secondary hover:border-strong'
-              ]"
-            >
-              <input type="checkbox" :value="s" v-model="form.stress_config.stressors" class="sr-only" />
-              <Icon
-                v-if="form.stress_config.stressors.includes(s)"
-                name="check" :size="12" stroke-width="3"
-              />
-              <span class="font-mono">{{ s }}</span>
-            </label>
-          </div>
-        </div>
-      </section>
-
-      <div v-if="error" class="alert-error">
-        <Icon name="x_circle" :size="18" class="mt-0.5 shrink-0" />
-        <span>{{ error }}</span>
-      </div>
-
-      <div class="flex items-center justify-between gap-3 pt-2">
-        <RouterLink to="/" class="btn-ghost">{{ t('common.cancel') }}</RouterLink>
-        <button type="submit" class="btn-primary btn-lg" :disabled="submitting || selectedNodes.length === 0 || form.workers_per_node < 1">
-          <Spinner v-if="submitting" :size="16" />
-          <Icon v-else name="play" :size="16" />
-          {{ submitting ? t('newJob.submitting') : t('newJob.submit') }}
+      <div class="flex items-center gap-2">
+        <button type="button" class="btn-secondary btn-sm" @click="onCancel">{{ t('wizard.cancel') }}</button>
+        <button type="button" class="btn-secondary btn-sm" @click="onSaveDraft">
+          <Icon name="check" :size="13" stroke-width="3" />
+          {{ t('wizard.saveDraft') }}
         </button>
       </div>
-    </form>
+    </header>
+
+    <div v-if="draftRestored" class="draft-banner">
+      <Icon name="info" :size="16" />
+      <span class="flex-1">{{ t('wizard.draftRestored') }}</span>
+      <button type="button" class="btn-sm btn-ghost" @click="onResetDraft">{{ t('wizard.draftReset') }}</button>
+      <button type="button" class="btn-sm btn-ghost" @click="draftRestored = false">
+        <Icon name="x" :size="14" />
+      </button>
+    </div>
+
+    <div v-if="toast" class="toast">{{ toast }}</div>
+
+    <div class="wizard-grid">
+      <WizardSidebar />
+
+      <main class="wizard-main">
+        <component :is="currentStepComponent" />
+
+        <footer class="wizard-footer">
+          <button
+            type="button"
+            class="btn-ghost btn-lg"
+            :disabled="store.currentStep === 1"
+            @click="store.previous()"
+          >
+            <Icon name="chevron_left" :size="16" />
+            {{ t('wizard.previous') }}
+          </button>
+          <button
+            v-if="!isLastStep"
+            type="button"
+            class="btn-primary btn-lg"
+            :disabled="!store.stepValid[store.currentStep - 1]"
+            @click="store.next()"
+          >
+            {{ nextLabel }}
+            <Icon name="chevron_right" :size="16" />
+          </button>
+        </footer>
+      </main>
+
+      <WizardSummary />
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter, RouterLink } from 'vue-router'
-import { useJobsStore } from '../stores/jobs.js'
-import { useSettingsStore } from '../stores/settings.js'
-import { api } from '../api/client.js'
-import PageHeader from '../components/PageHeader.vue'
-import Icon       from '../components/Icon.vue'
-import Spinner    from '../components/Spinner.vue'
+import { useWizardStore } from '../stores/wizard.js'
+import BenchereWordmark from '../components/BenchereWordmark.vue'
+import Icon from '../components/Icon.vue'
+import WizardSidebar from '../components/wizard/WizardSidebar.vue'
+import WizardSummary from '../components/wizard/WizardSummary.vue'
+import Step1Type from '../components/wizard/Step1Type.vue'
+import Step2Cluster from '../components/wizard/Step2Cluster.vue'
+import Step3Pool from '../components/wizard/Step3Pool.vue'
+import Step4Profiles from '../components/wizard/Step4Profiles.vue'
+import Step4CpuConfig from '../components/wizard/Step4CpuConfig.vue'
+import Step5Workers from '../components/wizard/Step5Workers.vue'
+import Step6Range from '../components/wizard/Step6Range.vue'
+import Step7Review from '../components/wizard/Step7Review.vue'
 
 const { t } = useI18n()
+const router = useRouter()
+const store = useWizardStore()
+const draftRestored = ref(false)
+const toast = ref('')
 
-const router        = useRouter()
-const jobsStore     = useJobsStore()
-const settingsStore = useSettingsStore()
-
-const settings   = ref(null)
-const configured = computed(() => !!settings.value?.proxmox_url)
-const legacyEnabled = computed(() => !!settings.value?.enable_legacy_backends)
-
-const modes = [
-  { value: 'storage', icon: 'hard_drive', label: 'Stockage', hint: 'IOPS, débit, latence' },
-  { value: 'cpu',     icon: 'cpu',        label: 'CPU',      hint: 'Charge CPU pure (stress-ng)' },
-  { value: 'mixed',   icon: 'shuffle',    label: 'Mixte',    hint: 'Stockage + CPU en parallèle' },
-]
-
-const engineOptions = computed(() => [
-  { value: 'fio',      label: t('newJob.engine.fio'),      hint: t('newJob.engine.fioHint') },
-  { value: 'elbencho', label: t('newJob.engine.elbencho'), hint: t('newJob.engine.elbenchoHint') },
-])
-
-const stressors = ['cpu', 'vm', 'io', 'hdd']
-
-const profiles   = ref([])
-const submitting = ref(false)
-const error      = ref('')
-const availableStorages = ref([])
-const storagesLoading   = ref(true)
-const storagesError     = ref('')
-const availableNodes    = ref([])
-const nodesLoading      = ref(true)
-const selectedNodes     = ref([])
-
-const form = reactive({
-  name:             '',
-  client_name:      '',
-  mode:             'storage',
-  engine:           'fio',
-  workers_per_node: 1,
-  worker_cpu:       4,
-  worker_ram_mb:    4096,
-  os_disk_gb:       20,
-  data_disks:       1,
-  data_disk_gb:     50,
-  storage_pools:    [],
-  profiles:         [],
-  stress_config:    { workers: 4, timeout: 120, stressors: ['cpu'] },
-})
-
-const totalWorkers = computed(() => selectedNodes.value.length * (form.workers_per_node || 0))
-const allNodesSelected = computed(() =>
-  availableNodes.value.length > 0 && selectedNodes.value.length === availableNodes.value.length
-)
-
-// Profiles list filtered by the selected engine. Profiles missing an
-// engine field default to elbencho (legacy DB rows).
-const filteredProfiles = computed(() => {
-  return profiles.value.filter(p => (p.engine || 'elbencho') === form.engine)
-})
-
-function toggleAllNodes() {
-  selectedNodes.value = allNodesSelected.value
-    ? []
-    : availableNodes.value.map(n => n.name)
+// Mapping of step keys (defined in stores/wizard.js STEP_DEFS) to the
+// concrete components rendered in the main column.
+const COMPONENTS = {
+  type: Step1Type,
+  cluster: Step2Cluster,
+  pool: Step3Pool,
+  profiles: Step4Profiles,
+  cpuConfig: Step4CpuConfig,
+  workers: Step5Workers,
+  range: Step6Range,
+  review: Step7Review,
 }
 
-watch(() => form.mode, () => { error.value = '' })
-
-// When the engine changes, drop any selected profile that does not exist
-// on the new engine. The user keeps profiles whose names match across
-// engines (the six canonical seed profiles do).
-watch(() => form.engine, () => {
-  const validNames = new Set(filteredProfiles.value.map(p => p.name))
-  form.profiles = form.profiles.filter(n => validNames.has(n))
-  error.value = ''
+const currentStepComponent = computed(() => {
+  const key = store.stepKeys[store.currentStep - 1]
+  return COMPONENTS[key] || Step1Type
 })
 
-// React to node selection: refetch storage intersection from /api/proxmox/storages?nodes=
-watch(selectedNodes, async (nodes) => {
-  if (!nodes || nodes.length === 0) {
-    availableStorages.value = []
-    return
-  }
-  storagesLoading.value = true
-  storagesError.value = ''
-  try {
-    const url = '/api/proxmox/storages?nodes=' + encodeURIComponent(nodes.join(','))
-    const r = await fetch(url)
-    if (!r.ok) {
-      const msg = await r.text()
-      storagesError.value = t('newJob.storage.fetchFailed', { msg })
-      availableStorages.value = []
-      return
-    }
-    const list = (await r.json()) || []
-    const filtered = list.filter(s => (s.content || '').split(',').map(c => c.trim()).includes('images'))
-    availableStorages.value = filtered
+const isLastStep = computed(() => store.currentStep === store.totalSteps)
 
-    // Drop previously selected pools that are no longer available
-    const stillAvailable = new Set(filtered.map(s => s.id))
-    const dropped = form.storage_pools.filter(p => !stillAvailable.has(p))
-    if (dropped.length > 0) {
-      form.storage_pools = form.storage_pools.filter(p => stillAvailable.has(p))
-      error.value = t('newJob.storage.changedToast', { storage: dropped.join(', ') })
-    }
-    if (!filtered.length) {
-      storagesError.value = t('newJob.storage.intersectionEmpty')
-    }
-  } catch (e) {
-    storagesError.value = t('newJob.storage.fetchFailed', { msg: e.message || String(e) })
-    availableStorages.value = []
-  } finally {
-    storagesLoading.value = false
-  }
-}, { deep: true })
+// Label of the next step in the user's locale, used in the Suivant - X
+// CTA on the right side of the footer. Falls back to a plain Suivant
+// label when the next step has no specific i18n key.
+const nextLabel = computed(() => {
+  const nextKey = store.stepKeys[store.currentStep]
+  if (!nextKey) return t('wizard.nextNoLabel')
+  const title = t('wizard.steps.' + nextKey + '.title')
+  return t('wizard.next', { nextStep: title })
+})
 
-onMounted(async () => {
-  try { settings.value = await settingsStore.load() } catch (_) {}
-  try { profiles.value = await api.listProfiles() ?? [] } catch (_) {}
-
-  // Fetch nodes from /api/overview (cluster + default_node)
-  nodesLoading.value = true
-  try {
-    const r = await fetch('/api/overview')
-    if (r.ok) {
-      const data = await r.json()
-      availableNodes.value = (data.cluster || []).map(n => ({
-        name: n.name,
-        cpu_pct: typeof n.cpu_pct === 'number' ? n.cpu_pct : 0,
-        ram_pct: typeof n.ram_pct === 'number' ? n.ram_pct : 0,
-      }))
-      const defaultNode = data.default_node || ''
-      if (defaultNode && availableNodes.value.find(n => n.name === defaultNode)) {
-        selectedNodes.value = [defaultNode]
-      }
+onMounted(() => {
+  if (store.loadDraft()) {
+    // Only show the banner when there is an actual partial draft, not
+    // the bare default state.
+    if (store.type || store.cluster || store.pool || store.profiles.length > 0) {
+      draftRestored.value = true
     }
-  } catch (_) {
-    // network/JSON failure - leave availableNodes empty; UI shows the empty state
-  } finally {
-    nodesLoading.value = false
   }
 })
 
-async function submit() {
-  error.value = ''
-  if (selectedNodes.value.length === 0) {
-    error.value = t('newJob.errors.noNodeSelected')
-    return
-  }
-  if (form.workers_per_node < 1) {
-    error.value = t('newJob.errors.noNodeSelected')
-    return
-  }
-  if (form.mode !== 'cpu' && form.profiles.length === 0) {
-    error.value = t('newJob.errors.profilesEmpty')
-    return
-  }
-  if (form.storage_pools.length === 0) {
-    error.value = t('newJob.errors.storagesEmpty')
-    return
-  }
-
-  const basePayload = {
-    name:             form.name,
-    client_name:      form.client_name,
-    mode:             form.mode,
-    engine:           form.engine,
-    proxmox_nodes:    [...selectedNodes.value],
-    workers_per_node: form.workers_per_node,
-    worker_cpu:       form.worker_cpu,
-    worker_ram_mb:    form.worker_ram_mb,
-    os_disk_gb:       form.os_disk_gb,
-    data_disks:       form.data_disks,
-    data_disk_gb:     form.data_disk_gb,
-    profiles:         form.mode === 'cpu' ? [] : form.profiles,
-    stress_config:    form.mode === 'storage' ? null : {
-      ...form.stress_config,
-      stressors: [...form.stress_config.stressors],
-    },
-  }
-
-  submitting.value = true
-  try {
-    const ids = []
-    for (const pool of form.storage_pools) {
-      // Suffix the name with the pool when running on multiple, so each job
-      // is identifiable in the history without losing the user's chosen name.
-      const name = form.storage_pools.length > 1 ? `${form.name} · ${pool}` : form.name
-      const id = await jobsStore.createJob({ ...basePayload, name, storage_pool: pool })
-      ids.push(id)
-    }
-    if (ids.length === 1) {
-      router.push(`/dashboard/${ids[0]}`)
-    } else {
-      router.push('/history')
-    }
-  } catch (e) {
-    error.value = 'Erreur : ' + e.message
-    submitting.value = false
-  }
+function showToast(msg) {
+  toast.value = msg
+  setTimeout(() => { toast.value = '' }, 2400)
 }
+
+function onCancel() {
+  const dirty = store.type || store.cluster || store.pool || store.profiles.length > 0
+  if (dirty && !confirm(t('wizard.cancelConfirm'))) return
+  store.reset()
+  router.push('/')
+}
+
+function onSaveDraft() {
+  store.persistDraft()
+  showToast(t('wizard.draftSaved'))
+}
+
+function onResetDraft() {
+  store.reset()
+  draftRestored.value = false
+}
+
+// Auto-fetch estimate when the user changes step. The summary panel
+// runs its own debounced watcher, but advancing a step is a strong
+// trigger that should refresh immediately.
+watch(() => store.currentStep, () => {
+  store.fetchEstimate()
+})
 </script>
+
+<style scoped>
+.wizard-shell {
+  min-height: 100vh;
+  background: var(--bg-canvas);
+  display: flex;
+  flex-direction: column;
+}
+
+.wizard-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.benchere-link {
+  display: inline-flex;
+  align-items: center;
+  color: var(--fg-primary);
+  text-decoration: none;
+}
+
+.breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.breadcrumb-sep { color: var(--fg-faint); }
+
+.breadcrumb-text {
+  font-size: 13px;
+  color: var(--fg-secondary);
+}
+
+.draft-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 24px;
+  background: var(--bg-brand-soft);
+  border-bottom: 1px solid #fdba74;
+  color: #9a3412;
+  font-size: 13px;
+}
+html.dark .draft-banner {
+  border-color: rgba(249, 115, 22, 0.35);
+  color: #fdba74;
+}
+
+.toast {
+  position: fixed;
+  top: 70px;
+  right: 24px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #16a34a;
+  color: #ffffff;
+  font-size: 13px;
+  z-index: 50;
+  box-shadow: var(--shadow-pop);
+}
+html.dark .toast { background: #4ade80; color: #052e16; }
+
+.wizard-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 240px 1fr 320px;
+  min-height: 0;
+}
+
+@media (max-width: 1280px) {
+  .wizard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wizard-main {
+  padding: 32px 36px;
+  max-width: 900px;
+  width: 100%;
+}
+
+.wizard-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 36px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-subtle);
+}
+</style>
